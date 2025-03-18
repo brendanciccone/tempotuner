@@ -24,7 +24,6 @@ export default function ClientApp() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">TempoTuner</h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              {activeTab === "tempo" ? "Find the BPM of any song" : "Tune your instrument"}
             </p>
           </div>
           <ThemeToggle />
