@@ -110,7 +110,7 @@ export default function TapTempo() {
 
               {/* Tap Button */}
               <div
-                className={`w-36 sm:w-40 aspect-square rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-2xl cursor-pointer transition-all select-none shadow-lg hover:shadow-xl active:shadow-md ${
+                className={`w-36 sm:w-40 aspect-square rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-2xl cursor-pointer transition-all select-none user-select-none shadow-lg hover:shadow-xl active:shadow-md ${
                   isAnimating ? "scale-95" : ""
                 }`}
                 onClick={handleTap}
@@ -122,8 +122,9 @@ export default function TapTempo() {
                     handleTap()
                   }
                 }}
+                style={{ WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none', userSelect: 'none' }}
               >
-                TAP
+                <span className="pointer-events-none" style={{ WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none', userSelect: 'none' }}>TAP</span>
               </div>
             </div>
           </div>
