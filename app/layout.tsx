@@ -8,9 +8,14 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "TempoTuner",
   description: "A simple tempo and instrument tuning tool for musicians",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
-    generator: 'v0.dev'
+  generator: 'v0.dev'
 }
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  scrollBehavior: 'auto',
+};
 
 export default function RootLayout({
   children,
