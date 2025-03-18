@@ -34,10 +34,10 @@ export class AudioAnalyzer {
         })
       }
 
-      // Set up analyzer with optimized settings for better low frequency detection
+      // Set up analyzer with optimized settings for better frequency detection
       this.analyser = this.audioContext.createAnalyser()
-      this.analyser.fftSize = 16384 // Large FFT size for better low frequency resolution
-      this.analyser.smoothingTimeConstant = 0.5 // Reduced for better responsiveness (was 0.6)
+      this.analyser.fftSize = 4096 // Further reduced for faster response and better performance
+      this.analyser.smoothingTimeConstant = 0.2 // Further reduced for better responsiveness
 
       // Connect audio source to analyzer
       this.source = this.audioContext.createMediaStreamSource(this.stream)
@@ -66,20 +66,23 @@ export class AudioAnalyzer {
     return this.audioContext?.sampleRate || 44100
   }
 
-  // Detect pitch using the most appropriate algorithm based on signal characteristics
+  // Detect pitch using optimized algorithm selection for guitar strings
   detectPitch(buffer: Float32Array): number {
     if (!this.audioContext) return 0
 
-    // Detect if we're likely dealing with a low frequency signal
-    const isLowFrequency = detectLowFrequencySignal(buffer, this.audioContext.sampleRate)
-
-    // Use appropriate pitch detection method
+    const sampleRate = this.audioContext.sampleRate
+    
+    // For guitar tuning, use different algorithms based on frequency ranges
+    // Zero-crossing works better for low E and A (below 110Hz)
+    // YIN works better for mid to high frequencies
+    const isLowFrequency = detectLowFrequencySignal(buffer, sampleRate)
+    
     if (isLowFrequency) {
-      // Always use zero-crossing for very low frequencies
-      return detectPitchZeroCrossing(buffer, this.audioContext.sampleRate)
+      // Use zero-crossing for low frequencies (E, A strings)
+      return detectPitchZeroCrossing(buffer, sampleRate)
     } else {
-      // Use YIN algorithm for mid to high frequencies
-      return detectPitchYIN(buffer, this.audioContext.sampleRate)
+      // For mid to high frequencies, use YIN with optimized parameters
+      return detectPitchYIN(buffer, sampleRate)
     }
   }
 

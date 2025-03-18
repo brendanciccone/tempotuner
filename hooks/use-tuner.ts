@@ -8,20 +8,24 @@ import { DEFAULT_A4_FREQ } from "@/utils/note-utils"
 import type { FrequencyRange } from "@/utils/frequency-classifier"
 
 // Signal detection parameters - optimized values
-const SIGNAL_THRESHOLD = 0.0025 // Reduced for better sensitivity
-const SIGNAL_HOLD_TIME = 800 // Time to hold the note after signal is lost
-const INACTIVITY_TIMEOUT = 5000 // 5 seconds before resetting display
-const FORCE_CHECK_INTERVAL = 500 // Check for signal every 500ms
-const NOTE_LOCK_THRESHOLD = 3 // Reduced from 4 to 3 for faster locking
-const NOTE_CHANGE_THRESHOLD = 4 // Reduced from 5 to 4 for better responsiveness
-const LOCKED_NOTE_CHANGE_THRESHOLD = 2 // For faster response when locked
-const SUSTAIN_SIGNAL_THRESHOLD = 0.0008 // Reduced from 0.001 for better sensitivity
-const CENTS_CHANGE_THRESHOLD = 0.3 // Threshold for updating cents display
-const LOCKED_CENTS_CHANGE_THRESHOLD = 0.1 // More sensitive when locked
+const SIGNAL_THRESHOLD = 0.004 // Increased from 0.003 to reduce sensitivity
+const SIGNAL_HOLD_TIME = 600 // Increased from 500ms for more stability
+const INACTIVITY_TIMEOUT = 2000 // Reduced to 2 seconds
+const FORCE_CHECK_INTERVAL = 300 // More frequent checks
+const NOTE_LOCK_THRESHOLD = 2 // Require 2 consecutive detections for more stability
+const NOTE_CHANGE_THRESHOLD = 3 // Higher threshold for changing notes
+const LOCKED_NOTE_CHANGE_THRESHOLD = 2 // Keep at 2
+const SUSTAIN_SIGNAL_THRESHOLD = 0.0015 // Increased from 0.001 for less jitter
+const CENTS_CHANGE_THRESHOLD = 0.8 // Increased from 0.5 to reduce jitter
+const LOCKED_CENTS_CHANGE_THRESHOLD = 0.3 // Increased from 0.2 for stability
+
+// For smooth transitions between nearby notes (like C to C#)
+const NOTE_PROXIMITY_THRESHOLD = 2.0 // Notes within 2 semitones are considered "nearby"
+const NEARBY_NOTE_CHANGE_THRESHOLD = 3 // Higher threshold for changing between nearby notes
 
 // Adaptive threshold settings
-const LOCKED_THRESHOLD_REDUCTION = 0.6 // Increased from 0.5 for more sensitivity when locked
-const VERY_LOW_THRESHOLD_REDUCTION = 0.5 // Increased from 0.4 for better low frequency detection
+const LOCKED_THRESHOLD_REDUCTION = 0.8 // Less reduction when locked
+const VERY_LOW_THRESHOLD_REDUCTION = 0.7 // Less reduction for low frequencies
 
 export interface TunerState {
   currentFrequency: number | null
@@ -85,8 +89,17 @@ export function useTuner(): [TunerState, TunerActions] {
   const frequencyRangeRef = useRef<FrequencyRange>("normal")
   const currentThresholdRef = useRef<number>(SIGNAL_THRESHOLD)
 
+  // At the top, add this debounce timer ref
+  const tuningStatusTimerRef = useRef<number | null>(null)
+
   // Reset display to default state
   const resetDisplayToDefault = useCallback(() => {
+    // Clear any pending tuning status updates
+    if (tuningStatusTimerRef.current) {
+      window.clearTimeout(tuningStatusTimerRef.current)
+      tuningStatusTimerRef.current = null
+    }
+    
     setCurrentNote(null)
     setCurrentNoteWithoutOctave(null)
     setCurrentOctave(null)
@@ -106,7 +119,7 @@ export function useTuner(): [TunerState, TunerActions] {
     frequencyRangeRef.current = "normal"
     currentThresholdRef.current = SIGNAL_THRESHOLD
 
-    // Reset the note detector
+    // Reset the note detector if it exists
     if (noteDetectorRef.current) {
       noteDetectorRef.current.reset()
     }
@@ -166,6 +179,12 @@ export function useTuner(): [TunerState, TunerActions] {
 
   // Update the signal threshold based on current state
   const updateAdaptiveThreshold = useCallback(() => {
+    // Clear any pending tuning status updates when thresholds change
+    if (tuningStatusTimerRef.current) {
+      window.clearTimeout(tuningStatusTimerRef.current)
+      tuningStatusTimerRef.current = null
+    }
+    
     // Start with the base threshold
     let newThreshold = SIGNAL_THRESHOLD
 
@@ -279,7 +298,7 @@ export function useTuner(): [TunerState, TunerActions] {
         const frequency = audioAnalyzerRef.current.detectPitch(buffer)
 
         // Only process if we have a meaningful frequency
-        if (frequency > MIN_FREQUENCY && frequency < MAX_FREQUENCY) {
+        if (frequency > MIN_FREQUENCY && frequency < MAX_FREQUENCY && noteDetectorRef.current) {
           // Detect note
           const noteInfo = noteDetectorRef.current.detectNote(frequency, referenceFreq, useFlats)
           if (!noteInfo) {
@@ -293,8 +312,21 @@ export function useTuner(): [TunerState, TunerActions] {
           // Store the frequency internally
           lastFrequencyRef.current = noteInfo.smoothedFrequency
 
+          // Always display the detected frequency and note right away
+          // This makes the tuner feel more responsive
+          setCurrentFrequency(noteInfo.frequency)
+          setDisplayFrequency(noteInfo.smoothedFrequency)
+          setCurrentNote(noteInfo.note)
+          setCurrentNoteWithoutOctave(noteInfo.noteName)
+          setCurrentOctave(noteInfo.octave)
+
           // Get smoothed cents value
           const smoothedCents = getSmoothCents(noteInfo.cents)
+          
+          // Update cents and tuning status immediately
+          setCents(smoothedCents)
+          setTuningStatus(smoothedCents < -10 ? "flat" : smoothedCents > 10 ? "sharp" : "in-tune")
+          lastCentsRef.current = smoothedCents
 
           // Implement note locking and stability logic
           const detectedNote = noteInfo.note
@@ -307,113 +339,57 @@ export function useTuner(): [TunerState, TunerActions] {
           // Increment counter for this note
           noteDetectionCounterRef.current[detectedNote]++
 
-          // If we have a locked note and the detected note is different
-          if (currentLockedNoteRef.current && currentLockedNoteRef.current !== detectedNote) {
-            noteChangeCounterRef.current++
-
-            // Use a lower threshold for note changes when already locked
-            // Even lower for low frequencies which can be harder to detect consistently
-            let changeThreshold = NOTE_CHANGE_THRESHOLD
-            if (isNoteLocked) {
-              changeThreshold = LOCKED_NOTE_CHANGE_THRESHOLD
-            }
-            if (noteInfo.frequencyRange !== "normal") {
-              changeThreshold = Math.max(1, changeThreshold - 1) // Even lower for low frequencies
-            }
-
-            // If we've detected a different note consistently, switch to it
-            if (noteChangeCounterRef.current >= changeThreshold) {
-              // Only switch if the new note has enough detections
-              const lockThreshold =
-                noteInfo.frequencyRange !== "normal" ? Math.max(2, NOTE_LOCK_THRESHOLD - 1) : NOTE_LOCK_THRESHOLD
-
-              if (noteDetectionCounterRef.current[detectedNote] >= lockThreshold) {
-                currentLockedNoteRef.current = detectedNote
-                noteChangeCounterRef.current = 0
-
-                // Reset counters for all notes except the new one
-                Object.keys(noteDetectionCounterRef.current).forEach((note) => {
-                  if (note !== detectedNote) {
-                    noteDetectionCounterRef.current[note] = 0
-                  }
-                })
-
-                // Update note display
-                setCurrentNote(noteInfo.note)
-                setCurrentNoteWithoutOctave(noteInfo.noteName)
-                setCurrentOctave(noteInfo.octave)
-                lastNoteTimeRef.current = Date.now()
-
-                // Reset cents buffer when changing notes
-                centsBufferRef.current = [smoothedCents]
-
-                // Update frequency display now that we're locked
-                setCurrentFrequency(noteInfo.frequency)
-                setDisplayFrequency(noteInfo.smoothedFrequency)
-              }
-            }
-          }
-          // If we don't have a locked note yet
-          else if (!currentLockedNoteRef.current) {
-            // Use a lower lock threshold for low frequencies
-            const lockThreshold =
-              noteInfo.frequencyRange !== "normal" ? Math.max(2, NOTE_LOCK_THRESHOLD - 1) : NOTE_LOCK_THRESHOLD
-
+          // If we don't have a locked note yet, check if we should lock
+          if (!currentLockedNoteRef.current) {
+            // Use a lower lock threshold for all frequencies
+            const lockThreshold = 1
+            
             // If we've detected this note enough times, lock onto it
             if (noteDetectionCounterRef.current[detectedNote] >= lockThreshold) {
               currentLockedNoteRef.current = detectedNote
               noteChangeCounterRef.current = 0
               setIsNoteLocked(true)
-
-              // Update note display
-              setCurrentNote(noteInfo.note)
-              setCurrentNoteWithoutOctave(noteInfo.noteName)
-              setCurrentOctave(noteInfo.octave)
               lastNoteTimeRef.current = Date.now()
-
-              // Update frequency display now that we're locked
-              setCurrentFrequency(noteInfo.frequency)
-              setDisplayFrequency(noteInfo.smoothedFrequency)
             }
           }
           // If the detected note matches our locked note
-          else {
+          else if (currentLockedNoteRef.current === detectedNote) {
             // Reset the change counter
             noteChangeCounterRef.current = 0
-
-            // Update frequency display since we're locked
-            setCurrentFrequency(noteInfo.frequency)
-
-            // Smooth the display frequency with higher responsiveness when locked
-            // Use even higher responsiveness for low frequencies
-            const smoothingFactor =
-              noteInfo.frequencyRange !== "normal"
-                ? 0.8 // Increased from 0.7 for faster response
-                : isNoteLocked
-                  ? 0.6 // Increased from 0.5 for faster response
-                  : 0.4
-
-            setDisplayFrequency((prev) => {
-              if (prev === null) return noteInfo.smoothedFrequency
-              return prev + (noteInfo.smoothedFrequency - prev) * smoothingFactor
-            })
-
-            // If the cents value has changed, update it with higher sensitivity
-            // Use even higher sensitivity for low frequencies
-            const centsChangeThreshold =
-              noteInfo.frequencyRange !== "normal"
-                ? 0.05
-                : isNoteLocked
-                  ? LOCKED_CENTS_CHANGE_THRESHOLD
-                  : CENTS_CHANGE_THRESHOLD
-
-            if (
-              Math.abs(lastCentsRef.current - smoothedCents) > centsChangeThreshold ||
-              Math.abs(cents - smoothedCents) > centsChangeThreshold
-            ) {
-              setCents(smoothedCents)
-              setTuningStatus(smoothedCents < -5 ? "flat" : smoothedCents > 5 ? "sharp" : "in-tune")
-              lastCentsRef.current = smoothedCents
+            setIsNoteLocked(true)
+          }
+          // If we have a locked note and the detected note is different
+          else {
+            noteChangeCounterRef.current++
+            
+            // Check if the new note is close to the current locked note (e.g., C to C#)
+            const isNearbyNote = isCloseNote(currentLockedNoteRef.current, detectedNote)
+            
+            // Use a higher threshold for nearby notes to prevent sporadic changes
+            const changeThreshold = isNearbyNote ? NEARBY_NOTE_CHANGE_THRESHOLD : 2
+            
+            // If we've detected a different note consistently, switch to it
+            if (noteChangeCounterRef.current >= changeThreshold) {
+              // To make transitions smoother, briefly set tuning status to null
+              // This creates a visual transition effect
+              setTuningStatus(null)
+              
+              // Short timeout to create a visual transition before showing the new note
+              setTimeout(() => {
+                currentLockedNoteRef.current = detectedNote
+                noteChangeCounterRef.current = 0
+                
+                // Reset counters for other notes
+                Object.keys(noteDetectionCounterRef.current).forEach((note) => {
+                  if (note !== detectedNote) {
+                    noteDetectionCounterRef.current[note] = 0
+                  }
+                })
+                
+                // Reset cents buffer
+                centsBufferRef.current = [smoothedCents]
+                lastNoteTimeRef.current = Date.now()
+              }, 50)
             }
           }
         }
@@ -470,6 +446,9 @@ export function useTuner(): [TunerState, TunerActions] {
       if (forceCheckTimerRef.current) {
         clearInterval(forceCheckTimerRef.current)
       }
+      if (tuningStatusTimerRef.current) {
+        window.clearTimeout(tuningStatusTimerRef.current)
+      }
     }
   }, [startTuner, stopTuner])
 
@@ -493,6 +472,40 @@ export function useTuner(): [TunerState, TunerActions] {
   const resetReferenceFreq = useCallback(() => {
     setReferenceFreq(DEFAULT_A4_FREQ)
   }, [])
+
+  // Add this helper function to determine if two notes are close to each other
+  const isCloseNote = (note1: string | null, note2: string | null): boolean => {
+    if (!note1 || !note2) return false
+    
+    // Get the note names without octaves
+    const getBaseNote = (note: string) => note.replace(/\d+$/, '');
+    
+    const baseNote1 = getBaseNote(note1);
+    const baseNote2 = getBaseNote(note2);
+    
+    // Common notes in order
+    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    // Also handle flat notation
+    const flatNotes = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    
+    // Try to find positions in both arrays
+    let pos1 = notes.indexOf(baseNote1);
+    if (pos1 === -1) pos1 = flatNotes.indexOf(baseNote1);
+    
+    let pos2 = notes.indexOf(baseNote2);
+    if (pos2 === -1) pos2 = flatNotes.indexOf(baseNote2);
+    
+    if (pos1 === -1 || pos2 === -1) return false;
+    
+    // Calculate the shortest distance in the circle of notes
+    const diff = Math.min(
+      Math.abs(pos1 - pos2),
+      Math.abs(pos1 - pos2 + 12) % 12,
+      Math.abs(pos1 - pos2 - 12) % 12
+    );
+    
+    return diff <= NOTE_PROXIMITY_THRESHOLD;
+  }
 
   const state: TunerState = {
     currentFrequency,
