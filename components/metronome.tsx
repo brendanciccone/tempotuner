@@ -47,6 +47,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4)
   const [isNotesExpanded, setIsNotesExpanded] = useState(false)
   const [isCompoundMeter, setIsCompoundMeter] = useState(false)
+  const [displayBpm, setDisplayBpm] = useState(initialBpm || 120)
 
   // Refs for audio processing
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -79,8 +80,13 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   // Update BPM when initialBpm changes
   useEffect(() => {
     if (initialBpm && initialBpm > 0) {
-      setBpm(initialBpm)
-      bpmRef.current = initialBpm
+      // Store the actual BPM for display and delay calculator
+      setDisplayBpm(initialBpm)
+      
+      // For the metronome functionality, limit to valid range
+      const metronomeValidBpm = Math.min(Math.max(40, initialBpm), 240)
+      setBpm(metronomeValidBpm)
+      bpmRef.current = metronomeValidBpm
     }
   }, [initialBpm])
 
@@ -105,7 +111,8 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
 
   // Update BPM ref when BPM changes
   useEffect(() => {
-    bpmRef.current = bpm
+    // For metronome functionality, ensure we use a BPM within valid range (40-240)
+    bpmRef.current = Math.min(Math.max(40, bpm), 240)
   }, [bpm])
 
   // Update isPlayingRef when isPlaying changes
@@ -288,30 +295,29 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     }
   }
 
-  // Handle BPM change
+  // Handle BPM change from slider
   const handleBpmChange = (value: number[]) => {
     const newBpm = value[0]
+    setDisplayBpm(newBpm)
     setBpm(newBpm)
     bpmRef.current = newBpm
     onBpmChange(newBpm)
-
-    // No need to restart the scheduler - it will use the updated BPM value
   }
 
   // Increment/decrement BPM
   const adjustBpm = (amount: number) => {
     const newBpm = Math.min(Math.max(40, bpm + amount), 240)
+    setDisplayBpm(newBpm)
     setBpm(newBpm)
     bpmRef.current = newBpm
     onBpmChange(newBpm)
-
-    // No need to restart the scheduler - it will use the updated BPM value
   }
 
   // Calculate note durations based on current BPM
   const calculateNoteDurations = () => {
     // Base duration for a quarter note in milliseconds
-    const quarterNote = Math.round(60000 / bpm)
+    // Use displayBpm which could be from tap tempo and might exceed 240
+    const quarterNote = Math.round(60000 / displayBpm)
 
     return [
       { name: "Whole note", symbol: "𝅝", duration: quarterNote * 4 },
@@ -479,8 +485,9 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
               </tbody>
             </table>
             <p className="mt-4 text-xs text-muted-foreground">
-              Delay and reverb times are calculated based on the current tempo ({bpm} BPM). A quarter note at this tempo
-              equals {Math.round(60000 / bpm)} milliseconds.
+              Delay and reverb times are calculated based on the current tempo ({displayBpm} BPM). A quarter note at this tempo
+              equals {Math.round(60000 / displayBpm)} milliseconds.
+              {displayBpm > 240 && " Metronome playback is limited to 240 BPM, but delay calculations remain accurate at any tempo."}
             </p>
           </div>
         </div>

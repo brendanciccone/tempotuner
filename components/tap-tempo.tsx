@@ -24,6 +24,7 @@ export default function TapTempo() {
     const averageInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length
 
     // Convert to BPM (60000 ms in a minute)
+    // No upper limit here - we want to calculate the exact BPM
     return Math.round(60000 / averageInterval)
   }, [])
 
@@ -133,7 +134,10 @@ export default function TapTempo() {
           <div className="w-full max-w-md mx-auto mt-4">
             <Metronome
               initialBpm={bpm || 120}
-              onBpmChange={(newBpm) => setBpm(newBpm)}
+              onBpmChange={(newBpm) => {
+                // Set our tap tempo BPM without any limits
+                setBpm(newBpm)
+              }}
               onStateChange={handleMetronomeStateChange}
             />
           </div>
