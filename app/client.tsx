@@ -7,12 +7,13 @@ import Tuner from "@/components/tuner"
 
 export default function ClientApp() {
   const [mounted, setMounted] = useState(false)
-  const [activeTab, setActiveTab] = useState<"tempo" | "tuner">("tuner") // Changed default to tuner
+  const [activeTab, setActiveTab] = useState<"tempo" | "tuner">("tuner")
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  // Return null on server to prevent hydration issues
   if (!mounted) {
     return null
   }
@@ -23,13 +24,12 @@ export default function ClientApp() {
         <div className="flex justify-between items-center mb-4 sm:mb-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">TempoTuner</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-            </p>
+            <p className="text-xs sm:text-sm text-muted-foreground"></p>
           </div>
           <ThemeToggle />
         </div>
 
-        {/* Tab Buttons - Reordered */}
+        {/* Tab Buttons */}
         <div className="flex w-full mb-4 border border-border rounded-lg overflow-hidden">
           <button
             onClick={() => setActiveTab("tuner")}
@@ -50,7 +50,8 @@ export default function ClientApp() {
         </div>
 
         {/* Content */}
-        {activeTab === "tempo" ? <TapTempo /> : <Tuner key="tuner-component" />}
+        {activeTab === "tempo" && <TapTempo />}
+        {activeTab === "tuner" && <Tuner key="tuner-component" />}
       </div>
     </main>
   )
