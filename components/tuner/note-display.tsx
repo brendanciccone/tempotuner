@@ -11,10 +11,11 @@ export function NoteDisplay({ note, frequency, signalDetected, tuningStatus, cen
   // Get the color for the note display based on tuning status
   const getNoteDisplayColor = () => {
     if (!signalDetected) return "text-muted-foreground opacity-50"
-    if (!tuningStatus) return "text-foreground opacity-80" // Show in neutral color if tuningStatus not determined yet
+    // Always show as in-tune (green) when detecting if tuningStatus is null
+    if (!tuningStatus) return "text-green-500"
     if (tuningStatus === "flat" || tuningStatus === "sharp") return "text-red-500"
     if (tuningStatus === "in-tune") return "text-green-500"
-    return "text-muted-foreground opacity-50"
+    return "text-green-500" // Fallback to green for any other state
   }
 
   // Show note when signal is detected, don't require isNoteLocked

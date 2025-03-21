@@ -14,7 +14,7 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
   // Determine the needle and status colors consistently
   const getNeedleColor = () => {
     if (!signalDetected) return "bg-gray-400"
-    if (!tuningStatus) return "bg-gray-500" // Neutral darker gray when detecting
+    if (!tuningStatus) return "bg-green-500" // Always show as in-tune when detecting
     return tuningStatus === "in-tune" ? "bg-green-500" : "bg-red-500"
   }
 
@@ -27,7 +27,7 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
         {/* In-tune zone indicator - wider to be more forgiving */}
         <div
           className={`absolute h-1 transition-colors duration-300 ${
-            tuningStatus === "in-tune" && signalDetected ? "bg-green-500" : "bg-muted-foreground/30"
+            (tuningStatus === "in-tune" || !tuningStatus) && signalDetected ? "bg-green-500" : "bg-muted-foreground/30"
           }`}
           style={{
             width: "20%" /* +/- 10 cents = 20% of the total width - more forgiving range */,
@@ -52,7 +52,7 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
             <span>Tune Up</span>
           </div>
         )}
-        {signalDetected && tuningStatus === "in-tune" && (
+        {signalDetected && (tuningStatus === "in-tune" || !tuningStatus) && (
           <div className="flex items-center text-green-500 transition-opacity duration-300">
             <Check className="h-5 w-5 mr-1" />
             <span>In Tune</span>
@@ -63,9 +63,6 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
             <ArrowUp className="h-5 w-5 mr-1" />
             <span>Tune Down</span>
           </div>
-        )}
-        {!tuningStatus && signalDetected && (
-          <div className="text-muted-foreground text-sm transition-opacity duration-300">Detecting note...</div>
         )}
         {!signalDetected && (
           <div className="text-muted-foreground text-sm transition-opacity duration-300">Play a note...</div>

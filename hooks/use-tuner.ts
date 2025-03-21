@@ -370,9 +370,9 @@ export function useTuner(): [TunerState, TunerActions] {
             
             // If we've detected a different note consistently, switch to it
             if (noteChangeCounterRef.current >= changeThreshold) {
-              // To make transitions smoother, briefly set tuning status to null
-              // This creates a visual transition effect
-              setTuningStatus(null)
+              // Instead of null, use cents to set a valid tuning status during transition
+              const newTuningStatus = smoothedCents < -10 ? "flat" : smoothedCents > 10 ? "sharp" : "in-tune"
+              setTuningStatus(newTuningStatus)
               
               // Short timeout to create a visual transition before showing the new note
               setTimeout(() => {
