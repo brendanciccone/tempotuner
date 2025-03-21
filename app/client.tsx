@@ -31,7 +31,7 @@ export default function ClientApp() {
               height={32}
               className="rounded-[5px] border border-border shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
             />
-            <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">TempoTuner</h1>
+            <h1 className="text-2xl sm:text-3xl font-medium tracking-[-0.04em]">TempoTuner</h1>
             <p className="text-xs sm:text-sm text-muted-foreground"></p>
           </div>
           <ThemeToggle />
