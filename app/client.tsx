@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Image from "next/image"
 import { ThemeToggle } from "@/components/theme-toggle"
 import TapTempo from "@/components/tap-tempo"
 import Tuner from "@/components/tuner"
@@ -22,7 +23,14 @@ export default function ClientApp() {
     <main className="flex min-h-screen flex-col p-4 sm:p-6 bg-gradient-to-b from-background to-muted/30">
       <div className="w-full max-w-[340px] sm:max-w-sm md:max-w-md mx-auto">
         <div className="flex justify-between items-center mb-4 sm:mb-6">
-          <div>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/android-chrome-192x192.png"
+              alt="TempoTuner logo"
+              width={32}
+              height={32}
+              className="rounded"
+            />
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">TempoTuner</h1>
             <p className="text-xs sm:text-sm text-muted-foreground"></p>
           </div>
