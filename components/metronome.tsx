@@ -509,7 +509,6 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
                   <CustomSelectItem value="2/4">2/4</CustomSelectItem>
                   <CustomSelectItem value="3/4">3/4</CustomSelectItem>
                   <CustomSelectItem value="4/4">4/4</CustomSelectItem>
-                  <CustomSelectItem value="2/2">2/2 (Cut)</CustomSelectItem>
                 </SelectGroup>
                 <SelectGroup>
                   <SelectLabel className="px-3 py-1 text-xs font-semibold text-muted-foreground">Compound</SelectLabel>
@@ -519,21 +518,10 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
                 </SelectGroup>
                 <SelectGroup>
                   <SelectLabel className="px-3 py-1 text-xs font-semibold text-muted-foreground">
-                    Odd Meters
+                    Other
                   </SelectLabel>
                   <CustomSelectItem value="5/4">5/4</CustomSelectItem>
-                  <CustomSelectItem value="7/4">7/4</CustomSelectItem>
-                  <CustomSelectItem value="5/8">5/8</CustomSelectItem>
                   <CustomSelectItem value="7/8">7/8</CustomSelectItem>
-                </SelectGroup>
-                <SelectGroup>
-                  <SelectLabel className="px-3 py-1 text-xs font-semibold text-muted-foreground">Other</SelectLabel>
-                  <CustomSelectItem value="3/2">3/2</CustomSelectItem>
-                  <CustomSelectItem value="3/8">3/8</CustomSelectItem>
-                  <CustomSelectItem value="6/4">6/4</CustomSelectItem>
-                  <CustomSelectItem value="9/4">9/4</CustomSelectItem>
-                  <CustomSelectItem value="11/8">11/8</CustomSelectItem>
-                  <CustomSelectItem value="15/8">15/8</CustomSelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
