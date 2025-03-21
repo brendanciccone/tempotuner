@@ -74,15 +74,15 @@ export default function TapTempo() {
     setIsMetronomePlaying(playing)
     setCurrentBeat(beat)
 
-    // Animate tap button on first beat
-    if (playing && beat === 0) {
+    // Animate tap button on beat 1 (regardless of any other conditions)
+    if (playing && beat === 1) {
       setIsAnimating(true)
       setTimeout(() => setIsAnimating(false), 100)
     }
   }
 
   // Determine if we should show the pulse animation
-  const showPulse = isMetronomePlaying && currentBeat === 0
+  const showPulse = isMetronomePlaying && currentBeat === 1
 
   return (
     <Card className="shadow-lg border border-border w-full overflow-hidden bg-card/50 backdrop-blur-sm">

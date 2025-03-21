@@ -448,28 +448,6 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
 
   const noteDurations = calculateNoteDurations()
 
-  // Create the dots to visualize beats
-  const renderBeatVisualizer = () => {
-    const beats = [];
-    for (let i = 0; i < beatsPerMeasure; i++) {
-      beats.push(
-        <div
-          key={i}
-          className={`h-2 w-2 rounded-full transition-colors duration-100 ${
-            i === currentBeat 
-              ? (i === 0 ? "bg-primary" : "bg-secondary") 
-              : "bg-muted"
-          }`}
-        />
-      );
-    }
-    return (
-      <div className="flex gap-1 justify-center mt-2">
-        {beats}
-      </div>
-    );
-  };
-
   return (
     <div className="w-full">
       <div className="bg-background/10 backdrop-blur-sm rounded-xl p-4 border border-border shadow-sm">
@@ -527,9 +505,6 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
             </Select>
           </div>
 
-          {/* Beat Visualizer */}
-          {isPlaying && renderBeatVisualizer()}
-          
           {/* Bottom Row - BPM Slider with aligned buttons */}
           <div className="flex items-center gap-2">
             <Button
