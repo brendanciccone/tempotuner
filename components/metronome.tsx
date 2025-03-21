@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Volume2, VolumeX, Minus, Plus, ChevronDown, ChevronUp, Check } from "lucide-react"
@@ -100,14 +100,13 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     // Detect compound meters (6/8, 9/8, 12/8, etc.)
     setIsCompoundMeter((numerator === 6 || numerator === 9 || numerator === 12) && denominator === 8)
 
-    // Reset beat counter when time signature changes
-    beatCountRef.current = 0
-    setCurrentBeat(0)
-
-    if (onStateChange) {
-      onStateChange(isPlaying, 0)
+    // Reset beat counter ONLY when time signature changes and metronome is playing
+    if (isPlaying) {
+      console.log("Resetting beat counter due to time signature change");
+      beatCountRef.current = 0;
+      setCurrentBeat(0);
     }
-  }, [timeSignature, isPlaying, onStateChange])
+  }, [timeSignature, isPlaying])
 
   // Update BPM ref when BPM changes
   useEffect(() => {
@@ -123,9 +122,18 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   // Notify parent component of state changes
   useEffect(() => {
     if (onStateChange) {
-      onStateChange(isPlaying, currentBeat)
+      // Only notify parent of currentBeat if it's a meaningful value (>0)
+      // This prevents parent components from resetting the beat counter
+      onStateChange(isPlaying, isPlaying ? currentBeat : 0);
     }
-  }, [isPlaying, currentBeat, onStateChange])
+  }, [isPlaying, currentBeat, onStateChange]);
+
+  // Keep track of beat updates to prevent unexpected resets
+  useEffect(() => {
+    if (isPlayingRef.current) {
+      console.log(`Beat state updated: ${currentBeat}`);
+    }
+  }, [currentBeat]);
 
   // Clean up oscillators
   const cleanupOscillators = () => {
@@ -143,99 +151,145 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
 
   // Initialize audio context if needed
   const ensureAudioContext = () => {
-    if (!audioContextRef.current) {
-      try {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-      } catch (e) {
-        console.error("Web Audio API is not supported in this browser", e)
-        return false
+    try {
+      // Check if we have an existing context that's suspended
+      if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+        // Try to resume it
+        console.log("Resuming suspended audio context");
+        audioContextRef.current.resume();
+        return true;
       }
-    } else if (audioContextRef.current.state === "suspended") {
-      audioContextRef.current.resume()
+
+      // If we don't have a context or if there's an issue with the existing one, create a new one
+      if (!audioContextRef.current) {
+        console.log("Creating new audio context");
+        // Use the modern standardized API with fallback for older browsers
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        
+        if (!AudioContextClass) {
+          console.error("AudioContext is not supported in this browser");
+          return false;
+        }
+        
+        // Create a fresh audio context
+        audioContextRef.current = new AudioContextClass({
+          // Request low latency mode if available
+          latencyHint: 'interactive'
+        });
+        
+        // Force resume the context if suspended (some browsers require user interaction)
+        if (audioContextRef.current.state === "suspended") {
+          audioContextRef.current.resume();
+        }
+      }
+      
+      return true;
+    } catch (e) {
+      console.error("Error initializing AudioContext:", e);
+      return false;
     }
-    return true
   }
 
   // Play a metronome click with nicer waveforms
   const playClick = (time: number) => {
-    if (!audioContextRef.current || !isPlayingRef.current) return
+    if (!audioContextRef.current || !isPlayingRef.current) return;
 
-    // Create oscillator
-    const osc = audioContextRef.current.createOscillator()
-    const gainNode = audioContextRef.current.createGain()
-
-    // Determine beat type for sound selection
-    let beatType: "primary" | "secondary" | "regular" = "regular"
-
-    if (beatCountRef.current === 0) {
-      // First beat of the measure (downbeat)
-      beatType = "primary"
-    } else if (isCompoundMeter && beatCountRef.current % 3 === 0) {
-      // For compound meters (6/8, 9/8, 12/8), add secondary accent on beats 4, 7, 10
-      beatType = "secondary"
+    // Ensure we have a valid time parameter
+    if (isNaN(time)) {
+      console.error("Invalid time parameter in playClick:", time);
+      return;
     }
 
-    // Set up different sounds based on beat type with nicer waveforms
-    switch (beatType) {
-      case "primary":
-        // First beat - use a sine wave with higher pitch and volume
-        osc.type = "sine"
-        osc.frequency.value = 880 // A5 - higher pitch for first beat
-        gainNode.gain.value = 0.0
-        gainNode.gain.linearRampToValueAtTime(0.4, time) // Louder
-        break
-
-      case "secondary":
-        // Secondary accent - use a sine wave with medium pitch
-        osc.type = "sine"
-        osc.frequency.value = 659.25 // E5 - medium pitch
-        gainNode.gain.value = 0.0
-        gainNode.gain.linearRampToValueAtTime(0.25, time) // Medium volume
-        break
-
-      default:
-        // Regular beats - use a sine wave with lower pitch
-        osc.type = "sine"
-        osc.frequency.value = 440 // A4 - lower pitch
-        gainNode.gain.value = 0.0
-        gainNode.gain.linearRampToValueAtTime(0.15, time) // Quieter
+    // Get current beat count before incrementing
+    const currentBeatInMeasure = beatCountRef.current;
+    
+    // Debug beat count - add more details
+    console.log(`=============================`);
+    console.log(`Playing beat ${currentBeatInMeasure + 1} of ${beatsPerMeasureRef.current}, time: ${time.toFixed(3)}`);
+    console.log(`Beat count ref: ${beatCountRef.current}, UI state: ${currentBeat}`);
+    
+    // Use more distinct sound parameters for clearer differences
+    let soundType: OscillatorType;
+    let frequency: number;
+    let gain: number;
+    let message: string;
+    
+    // First beat uses completely different sound (triangle, higher pitch, louder)
+    if (currentBeatInMeasure === 0) {
+      soundType = "triangle";
+      frequency = 880; // A5
+      gain = 0.7;
+      message = `*** PRIMARY ACCENT - high pitch (beat ${currentBeatInMeasure + 1}) ***`;
+    } 
+    // Secondary accents for compound meters
+    else if (isCompoundMeter && currentBeatInMeasure % 3 === 0) {
+      soundType = "sine";
+      frequency = 659.25; // E5
+      gain = 0.4;
+      message = `*** SECONDARY ACCENT - medium pitch (beat ${currentBeatInMeasure + 1}) ***`;
+    } 
+    // Regular beats
+    else {
+      soundType = "sine";
+      frequency = 440; // A4
+      gain = 0.25;
+      message = `Regular beat - normal pitch (beat ${currentBeatInMeasure + 1})`;
     }
-
-    // Connect nodes
-    osc.connect(gainNode)
-    gainNode.connect(audioContextRef.current.destination)
-
-    // Set volume envelope with smoother ramp
-    gainNode.gain.linearRampToValueAtTime(0.001, time + 0.1)
-
-    // Track oscillators for cleanup
-    oscillatorsRef.current.push({ osc, gain: gainNode })
-
-    // Play sound at the precise scheduled time
-    osc.start(time)
-    osc.stop(time + 0.1)
-
-    // Set up cleanup after the sound is done
-    setTimeout(
-      () => {
-        const index = oscillatorsRef.current.findIndex((item) => item.osc === osc)
+    
+    console.log(message);
+    console.log(`Using sound: ${soundType}, ${frequency}Hz, gain: ${gain}`);
+    
+    // Create oscillator directly
+    const osc = audioContextRef.current.createOscillator();
+    const gainNode = audioContextRef.current.createGain();
+    
+    // Configure sound
+    osc.type = soundType;
+    osc.frequency.value = frequency;
+    
+    // Set envelope
+    gainNode.gain.value = 0;
+    gainNode.gain.setValueAtTime(0, time);
+    gainNode.gain.linearRampToValueAtTime(gain, time + 0.005);
+    gainNode.gain.linearRampToValueAtTime(0.0001, time + 0.1);
+    
+    // Connect and play
+    osc.connect(gainNode);
+    gainNode.connect(audioContextRef.current.destination);
+    
+    // Start and schedule stop
+    osc.start(time);
+    osc.stop(time + 0.1);
+    
+    // Track for cleanup
+    oscillatorsRef.current.push({ osc, gain: gainNode });
+    
+    // Cleanup when done
+    setTimeout(() => {
+      try {
+        const index = oscillatorsRef.current.findIndex(item => item.osc === osc);
         if (index !== -1) {
-          oscillatorsRef.current.splice(index, 1)
+          oscillatorsRef.current.splice(index, 1);
         }
-      },
-      (time + 0.2 - audioContextRef.current.currentTime) * 1000,
-    )
-
-    // Update beat count
-    beatCountRef.current = (beatCountRef.current + 1) % beatsPerMeasureRef.current
-
-    // Update UI on next animation frame to avoid blocking audio thread
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }, Math.max(0, (time + 0.15 - audioContextRef.current.currentTime) * 1000));
+    
+    // Update beat count AFTER scheduling the sound
+    const nextBeat = (currentBeatInMeasure + 1) % beatsPerMeasureRef.current;
+    beatCountRef.current = nextBeat;
+    console.log(`Beat counter updated to: ${nextBeat}`);
+    
+    // Update UI state on next animation frame
     requestAnimationFrame(() => {
       if (isPlayingRef.current) {
-        setCurrentBeat(beatCountRef.current)
+        setCurrentBeat(nextBeat);
       }
-    })
-  }
+    });
+    
+    console.log(`=============================`);
+  };
 
   // Schedule upcoming metronome clicks with improved timing and cleanup
   const scheduler = () => {
@@ -256,44 +310,102 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
       nextNoteTimeRef.current += secondsPerBeat
     }
 
-    // Schedule the next scheduler call
-    timerIDRef.current = window.setTimeout(scheduler, 25)
+    // Schedule the next scheduler call - use a shorter interval for better accuracy
+    timerIDRef.current = window.setTimeout(scheduler, 15)
   }
+
+  // Create sound to use for click sounds
+  const createSoundSamples = useCallback(() => {
+    if (!audioContextRef.current) return;
+    
+    console.log("Creating sound samples...");
+    
+    // Create test oscillators to ensure they're allowed
+    const testOsc = audioContextRef.current.createOscillator();
+    testOsc.type = "sine";
+    testOsc.frequency.value = 440;
+    
+    const testGain = audioContextRef.current.createGain();
+    testGain.gain.value = 0;
+    
+    testOsc.connect(testGain);
+    testGain.connect(audioContextRef.current.destination);
+    
+    // Start and immediately stop to "prime" the audio engine
+    testOsc.start(audioContextRef.current.currentTime);
+    testOsc.stop(audioContextRef.current.currentTime + 0.001);
+  }, []);
 
   // Toggle metronome on/off with improved state management and cleanup
   const toggleMetronome = () => {
-    if (!ensureAudioContext()) return
+    if (!ensureAudioContext()) return;
+
+    // Ensure audio context is running
+    if (audioContextRef.current && audioContextRef.current.state !== "running") {
+      audioContextRef.current.resume().catch(err => {
+        console.error("Failed to resume audio context:", err);
+      });
+    }
 
     if (isPlaying) {
       // Stop metronome
       if (timerIDRef.current) {
-        window.clearTimeout(timerIDRef.current)
-        timerIDRef.current = null
+        window.clearTimeout(timerIDRef.current);
+        timerIDRef.current = null;
       }
 
-      // Clean up any playing oscillators
-      cleanupOscillators()
-
-      setIsPlaying(false)
-      isPlayingRef.current = false
-      beatCountRef.current = 0
-      setCurrentBeat(0)
+      // Clean up oscillators
+      cleanupOscillators();
+      
+      // Reset state
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      beatCountRef.current = 0;
+      setCurrentBeat(0);
+      
+      console.log("Metronome stopped, beat counter reset to 0");
     } else {
-      // Start metronome
-      // Reset beat counter
-      beatCountRef.current = 0
-      setCurrentBeat(0)
-
-      // Clean up any lingering oscillators before starting
-      cleanupOscillators()
-
+      // Create fresh audio context to avoid issues
+      try {
+        if (audioContextRef.current) {
+          try {
+            audioContextRef.current.close().catch(() => {});
+          } catch (e) {
+            // Ignore errors
+          }
+          audioContextRef.current = null;
+        }
+        
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContextClass({ latencyHint: 'interactive' });
+        
+        createSoundSamples();
+      } catch (e) {
+        console.error("Failed to create AudioContext:", e);
+        ensureAudioContext();
+      }
+      
+      // Initialize state for starting
+      beatCountRef.current = 0;
+      setCurrentBeat(0);
+      nextNoteTimeRef.current = audioContextRef.current!.currentTime + 0.1;
+      
+      // Set playing states
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      
+      // Clean scheduler
+      if (timerIDRef.current) {
+        window.clearTimeout(timerIDRef.current);
+        timerIDRef.current = null;
+      }
+      
+      console.log("Metronome started with fresh context - beat counter set to 0");
+      
       // Start scheduling
-      nextNoteTimeRef.current = audioContextRef.current!.currentTime + 0.05 // Small delay before first beat
-      setIsPlaying(true)
-      isPlayingRef.current = true
-      scheduler()
+      scheduler();
     }
-  }
+  };
 
   // Handle BPM change from slider
   const handleBpmChange = (value: number[]) => {
@@ -335,6 +447,28 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   }
 
   const noteDurations = calculateNoteDurations()
+
+  // Create the dots to visualize beats
+  const renderBeatVisualizer = () => {
+    const beats = [];
+    for (let i = 0; i < beatsPerMeasure; i++) {
+      beats.push(
+        <div
+          key={i}
+          className={`h-2 w-2 rounded-full transition-colors duration-100 ${
+            i === currentBeat 
+              ? (i === 0 ? "bg-primary" : "bg-secondary") 
+              : "bg-muted"
+          }`}
+        />
+      );
+    }
+    return (
+      <div className="flex gap-1 justify-center mt-2">
+        {beats}
+      </div>
+    );
+  };
 
   return (
     <div className="w-full">
@@ -405,6 +539,9 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
             </Select>
           </div>
 
+          {/* Beat Visualizer */}
+          {isPlaying && renderBeatVisualizer()}
+          
           {/* Bottom Row - BPM Slider with aligned buttons */}
           <div className="flex items-center gap-2">
             <Button
