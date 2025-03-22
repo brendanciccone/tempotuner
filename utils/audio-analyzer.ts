@@ -82,7 +82,22 @@ export class AudioAnalyzer {
       return detectPitchZeroCrossing(buffer, sampleRate)
     } else {
       // For mid to high frequencies, use YIN with optimized parameters
-      return detectPitchYIN(buffer, sampleRate)
+      const yinFrequency = detectPitchYIN(buffer, sampleRate)
+      
+      // For mid-range frequencies (100-300Hz), cross-check with zero-crossing
+      // This helps correct potential errors in either algorithm
+      if (yinFrequency > 100 && yinFrequency < 300) {
+        const zcFrequency = detectPitchZeroCrossing(buffer, sampleRate)
+        
+        // If both algorithms detected something in a similar range, average them
+        // This helps eliminate the tendency to be sharp or flat
+        if (zcFrequency > 0 && Math.abs(yinFrequency - zcFrequency) / yinFrequency < 0.1) {
+          // Weighted average with more emphasis on YIN for mid-range
+          return (yinFrequency * 0.7 + zcFrequency * 0.3);
+        }
+      }
+      
+      return yinFrequency;
     }
   }
 
