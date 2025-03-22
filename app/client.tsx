@@ -5,6 +5,22 @@ import Image from "next/image"
 import { ThemeToggle } from "@/components/theme-toggle"
 import TapTempo from "@/components/tap-tempo"
 import Tuner from "@/components/tuner"
+import { Button } from "@/components/ui/button"
+import { Settings } from "lucide-react"
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export default function ClientApp() {
   const [mounted, setMounted] = useState(false)
@@ -34,7 +50,35 @@ export default function ClientApp() {
             <h1 className="text-2xl sm:text-3xl font-medium tracking-[-0.04em]">TempoTuner</h1>
             <p className="text-xs sm:text-sm text-muted-foreground"></p>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="icon" className="rounded-full">
+                  <Settings className="h-5 w-5" />
+                  <span className="sr-only">Settings</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Settings</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Style</h4>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select style" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Tab Buttons */}
