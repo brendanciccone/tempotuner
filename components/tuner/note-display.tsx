@@ -10,16 +10,14 @@ interface NoteDisplayProps {
 export function NoteDisplay({ note, frequency, signalDetected, tuningStatus, cents, isNoteLocked }: NoteDisplayProps) {
   // Get the color for the note display based on tuning status
   const getNoteDisplayColor = () => {
-    if (!signalDetected) return "text-muted-foreground opacity-50"
-    // Always show as in-tune (green) when detecting if tuningStatus is null
-    if (!tuningStatus) return "text-green-500"
+    if (!signalDetected || tuningStatus === null) return "text-muted-foreground opacity-50"
     if (tuningStatus === "flat" || tuningStatus === "sharp") return "text-red-500"
     if (tuningStatus === "in-tune") return "text-green-500"
-    return "text-green-500" // Fallback to green for any other state
+    return "text-muted-foreground opacity-70" // Fallback for any other state
   }
 
-  // Show note when signal is detected, don't require isNoteLocked
-  const showNote = signalDetected
+  // Show note when signal is detected AND tuningStatus is not null
+  const showNote = signalDetected && tuningStatus !== null && note !== "---"
   const showFrequency = frequency && showNote
 
   return (

@@ -9,12 +9,11 @@ interface TuningIndicatorProps {
 
 export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLocked }: TuningIndicatorProps) {
   // Only require signal detection, not note locking
-  const showActiveIndicator = signalDetected
+  const showActiveIndicator = signalDetected && tuningStatus !== null
   
   // Determine the needle and status colors consistently
   const getNeedleColor = () => {
-    if (!signalDetected) return "bg-gray-400"
-    if (!tuningStatus) return "bg-green-500" // Always show as in-tune when detecting
+    if (!signalDetected || tuningStatus === null) return "bg-gray-400"
     return tuningStatus === "in-tune" ? "bg-green-500" : "bg-red-500"
   }
 
@@ -27,7 +26,7 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
         {/* In-tune zone indicator - wider to be more forgiving */}
         <div
           className={`absolute h-1 transition-colors duration-300 ${
-            (tuningStatus === "in-tune" || !tuningStatus) && signalDetected ? "bg-green-500" : "bg-muted-foreground/30"
+            tuningStatus === "in-tune" && signalDetected ? "bg-green-500" : "bg-muted-foreground/30"
           }`}
           style={{
             width: "20%" /* +/- 10 cents = 20% of the total width - more forgiving range */,
@@ -39,20 +38,21 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
         <div
           className={`absolute w-1 h-8 transform -translate-x-1/2 transition-all duration-200 ${getNeedleColor()}`}
           style={{
-            left: signalDetected && cents !== 0 ? `${50 + Math.min(Math.max(cents * 1.1, -50), 50)}%` : "50%",
+            left: showActiveIndicator && cents !== 0 ? `${50 + Math.min(Math.max(cents * 1.1, -50), 50)}%` : "50%",
           }}
         ></div>
       </div>
 
       {/* Tuning Status - Add opacity transitions */}
       <div className="flex items-center justify-center h-8">
+        {/* Only show tuning messages when we're actively detecting */}
         {signalDetected && tuningStatus === "flat" && (
           <div className="flex items-center text-red-500 transition-opacity duration-300">
             <ArrowDown className="h-5 w-5 mr-1" />
             <span>Tune Up</span>
           </div>
         )}
-        {signalDetected && (tuningStatus === "in-tune" || !tuningStatus) && (
+        {signalDetected && tuningStatus === "in-tune" && (
           <div className="flex items-center text-green-500 transition-opacity duration-300">
             <Check className="h-5 w-5 mr-1" />
             <span>In Tune</span>
@@ -64,7 +64,8 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
             <span>Tune Down</span>
           </div>
         )}
-        {!signalDetected && (
+        {/* Show "Play a note..." when no active tuning is happening */}
+        {(!signalDetected || tuningStatus === null) && (
           <div className="text-muted-foreground text-sm transition-opacity duration-300">Play a note...</div>
         )}
       </div>
