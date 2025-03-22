@@ -10,7 +10,7 @@ import { TunerSettings } from "@/components/tuner/tuner-settings"
 export default function Tuner() {
   const [mounted, setMounted] = useState(false)
   const [state, actions] = useTuner()
-
+  
   useEffect(() => {
     setMounted(true)
   }, [])

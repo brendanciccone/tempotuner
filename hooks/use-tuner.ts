@@ -71,6 +71,21 @@ export function useTuner(): [TunerState, TunerActions] {
   const noteDetectorRef = useRef<NoteDetector | null>(null)
   const animationFrameRef = useRef<number | null>(null)
 
+  // Add a ref to track the current useFlats value
+  const useFlatsRef = useRef<boolean>(useFlats)
+  
+  // Add a ref to track the current referenceFreq value
+  const referenceFreqRef = useRef<number>(referenceFreq)
+
+  // Update the refs whenever the values change
+  useEffect(() => {
+    useFlatsRef.current = useFlats;
+  }, [useFlats]);
+  
+  useEffect(() => {
+    referenceFreqRef.current = referenceFreq;
+  }, [referenceFreq]);
+
   // Refs for signal processing and stability
   const lastNoteTimeRef = useRef<number>(0)
   const signalHoldTimerRef = useRef<number | null>(null)
@@ -299,8 +314,8 @@ export function useTuner(): [TunerState, TunerActions] {
 
         // Only process if we have a meaningful frequency
         if (frequency > MIN_FREQUENCY && frequency < MAX_FREQUENCY && noteDetectorRef.current) {
-          // Detect note
-          const noteInfo = noteDetectorRef.current.detectNote(frequency, referenceFreq, useFlats)
+          // Use the current value from the refs, which are always up-to-date
+          const noteInfo = noteDetectorRef.current.detectNote(frequency, referenceFreqRef.current, useFlatsRef.current)
           if (!noteInfo) {
             animationFrameRef.current = requestAnimationFrame(analyze)
             return
@@ -415,8 +430,6 @@ export function useTuner(): [TunerState, TunerActions] {
     // Start the analysis loop
     analyze()
   }, [
-    referenceFreq,
-    useFlats,
     resetDisplayToDefault,
     currentNote,
     currentFrequency,
@@ -454,7 +467,7 @@ export function useTuner(): [TunerState, TunerActions] {
 
   // Actions
   const toggleNotation = useCallback(() => {
-    setUseFlats((prev) => !prev)
+    setUseFlats((prev) => !prev);
   }, [])
 
   const toggleOctaveDisplay = useCallback(() => {
