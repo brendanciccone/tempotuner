@@ -25,10 +25,16 @@ import {
 export default function ClientApp() {
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<"tempo" | "tuner">("tuner")
+  const [selectedStyle, setSelectedStyle] = useState("default")
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Apply the selected style to the root element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-style', selectedStyle)
+  }, [selectedStyle])
 
   // Return null on server to prevent hydration issues
   if (!mounted) {
@@ -66,12 +72,13 @@ export default function ClientApp() {
                 <div className="space-y-4 py-2">
                   <div className="space-y-2">
                     <h4 className="font-medium">Style</h4>
-                    <Select>
+                    <Select value={selectedStyle} onValueChange={setSelectedStyle}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select style" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="typewriter">Typewriter</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
