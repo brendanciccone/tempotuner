@@ -388,8 +388,8 @@
   }
 }
 
-/* Futuristic style - Light mode */
-:root[data-style="futuristic"] {
+/* Soft style - Light mode */
+:root[data-style="soft"] {
   --background: 220 50% 98%;
   --foreground: 220 70% 10%;
   --card: 220 50% 97%;
@@ -438,8 +438,8 @@
   font-family: "Inter", "SF Pro Display", system-ui, sans-serif;
 }
 
-/* Futuristic style - Additional styles */
-:root[data-style="futuristic"] {
+/* Soft style - Additional styles */
+:root[data-style="soft"] {
   & .card,
   & .dialog-content,
   & .select-content,

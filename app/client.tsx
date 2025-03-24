@@ -78,11 +78,11 @@ export default function ClientApp() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="neon">Neon</SelectItem>
                         <SelectItem value="cyberpunk">Cyberpunk</SelectItem>
-                        <SelectItem value="futuristic">Futuristic</SelectItem>
+                        <SelectItem value="soft">Soft</SelectItem>
                         <SelectItem value="classic">Classic</SelectItem>
                         <SelectItem value="arcade">Arcade</SelectItem>
-                        <SelectItem value="neon">Neon</SelectItem>
                         <SelectItem value="nature">Nature</SelectItem>
                         <SelectItem value="minimalist">Minimalist</SelectItem>
                         <SelectItem value="typewriter">Typewriter</SelectItem>
