@@ -26,11 +26,24 @@ export const metadata: Metadata = {
     title: "Tuner, Metronome, and Tap Tempo | TempoTuner",
     description: "Chromatic tuner for any instrument, meteronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
     type: "website",
+    url: "https://tempotuner.app",
+    siteName: "TempoTuner",
+    locale: "en_US",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "TempoTuner - Tuner, Metronome, and Tap Tempo",
+      }
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Tuner, Metronome, and Tap Tempo | TempoTuner",
     description: "Chromatic tuner for any instrument, meteronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
+    creator: "@tempotuner",
+    images: ["/og-image.png"],
   }
 }
 
