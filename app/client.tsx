@@ -78,9 +78,14 @@ export default function ClientApp() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="default">Default</SelectItem>
-                        <SelectItem value="typewriter">Typewriter</SelectItem>
+                        <SelectItem value="cyberpunk">Cyberpunk</SelectItem>
+                        <SelectItem value="futuristic">Futuristic</SelectItem>
                         <SelectItem value="classic">Classic</SelectItem>
                         <SelectItem value="arcade">Arcade</SelectItem>
+                        <SelectItem value="neon">Neon</SelectItem>
+                        <SelectItem value="nature">Nature</SelectItem>
+                        <SelectItem value="minimalist">Minimalist</SelectItem>
+                        <SelectItem value="typewriter">Typewriter</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -95,7 +100,7 @@ export default function ClientApp() {
           <button
             onClick={() => setActiveTab("tuner")}
             className={`flex-1 py-2 text-center font-medium text-sm transition-colors ${
-              activeTab === "tuner" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted/50"
+              activeTab === "tuner" ? "bg-primary text-primary-foreground font-semibold" : "bg-card hover:bg-muted/50"
             }`}
           >
             Tuner
@@ -103,7 +108,7 @@ export default function ClientApp() {
           <button
             onClick={() => setActiveTab("tempo")}
             className={`flex-1 py-2 text-center font-medium text-sm transition-colors ${
-              activeTab === "tempo" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted/50"
+              activeTab === "tempo" ? "bg-primary text-primary-foreground font-semibold" : "bg-card hover:bg-muted/50"
             }`}
           >
             Tempo
