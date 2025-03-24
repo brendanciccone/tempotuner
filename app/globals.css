@@ -397,7 +397,7 @@
   --popover: 220 50% 97%;
   --popover-foreground: 220 70% 10%;
   --primary: 200 90% 50%;
-  --primary-foreground: 0 0% 100%;
+  --primary-foreground: 220 70% 10%;
   --secondary: 190 80% 88%;
   --secondary-foreground: 220 70% 10%;
   --muted: 190 80% 88%;
@@ -413,26 +413,26 @@
   font-family: "Inter", "SF Pro Display", system-ui, sans-serif;
 }
 
-/* Futuristic style - Dark mode */
-:root[class~="dark"][data-style="futuristic"] {
-  --background: 220 50% 5%;
+/* Soft style - Dark mode */
+:root[class~="dark"][data-style="soft"] {
+  --background: 220 50% 8%;
   --foreground: 220 20% 98%;
-  --card: 220 50% 8%;
+  --card: 220 50% 12%;
   --card-foreground: 220 20% 98%;
-  --popover: 220 50% 8%;
+  --popover: 220 50% 12%;
   --popover-foreground: 220 20% 98%;
   --primary: 200 90% 60%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 190 80% 15%;
+  --secondary: 190 80% 20%;
   --secondary-foreground: 220 20% 98%;
-  --muted: 190 80% 15%;
+  --muted: 190 80% 20%;
   --muted-foreground: 220 20% 70%;
-  --accent: 190 80% 15%;
+  --accent: 190 80% 20%;
   --accent-foreground: 220 20% 98%;
   --destructive: 350 90% 60%;
   --destructive-foreground: 220 20% 98%;
-  --border: 210 40% 15%;
-  --input: 210 40% 15%;
+  --border: 210 40% 20%;
+  --input: 210 40% 20%;
   --ring: 200 90% 60%;
   --radius: 1rem;
   font-family: "Inter", "SF Pro Display", system-ui, sans-serif;
@@ -540,6 +540,55 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-shadow: 0 0 15px hsla(var(--primary) / 0.5);
+  }
+}
+
+/* Dark mode specific adjustments for Soft style */
+:root[class~="dark"][data-style="soft"] {
+  & .card,
+  & .dialog-content,
+  & .select-content,
+  & button,
+  & input,
+  & .select-trigger {
+    background: linear-gradient(
+      135deg,
+      hsla(var(--card) / 0.9),
+      hsla(var(--card) / 0.6)
+    );
+    box-shadow: 
+      0 4px 12px hsla(var(--ring) / 0.3),
+      0 0 0 1px hsla(var(--ring) / 0.3);
+  }
+
+  & button:hover {
+    background: linear-gradient(
+      135deg,
+      hsla(var(--primary) / 0.2),
+      hsla(var(--primary) / 0.3)
+    );
+    border-color: hsla(var(--primary) / 0.6);
+    box-shadow: 
+      0 4px 12px hsla(var(--primary) / 0.3),
+      0 0 0 1px hsla(var(--primary) / 0.4);
+  }
+
+  & [role="switch"] {
+    background: hsla(var(--muted) / 0.9);
+  }
+
+  & [role="switch"] span {
+    background: hsla(var(--background) / 0.9);
+    box-shadow: 
+      0 2px 6px hsla(var(--primary) / 0.3);
+  }
+
+  & [role="tablist"] {
+    background: hsla(var(--muted) / 0.7);
+  }
+
+  & .frequency-display {
+    text-shadow: 0 0 15px hsla(var(--primary) / 0.7);
   }
 }
 

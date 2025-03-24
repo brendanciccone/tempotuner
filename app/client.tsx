@@ -100,7 +100,9 @@ export default function ClientApp() {
           <button
             onClick={() => setActiveTab("tuner")}
             className={`flex-1 py-2 text-center font-medium text-sm transition-colors ${
-              activeTab === "tuner" ? "bg-primary text-primary-foreground font-semibold" : "bg-card hover:bg-muted/50"
+              activeTab === "tuner" 
+                ? "bg-primary text-primary-foreground font-semibold" 
+                : "bg-card text-foreground hover:bg-muted/50"
             }`}
           >
             Tuner
@@ -108,7 +110,9 @@ export default function ClientApp() {
           <button
             onClick={() => setActiveTab("tempo")}
             className={`flex-1 py-2 text-center font-medium text-sm transition-colors ${
-              activeTab === "tempo" ? "bg-primary text-primary-foreground font-semibold" : "bg-card hover:bg-muted/50"
+              activeTab === "tempo" 
+                ? "bg-primary text-primary-foreground font-semibold" 
+                : "bg-card text-foreground hover:bg-muted/50"
             }`}
           >
             Tempo
