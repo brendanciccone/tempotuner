@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -141,6 +143,248 @@
 @layer utilities {
   .animate-pulse-ring {
     animation: pulse-ring 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* Classic style - Light mode */
+:root[data-style="classic"] {
+  --background: 0 0% 82%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 75%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 75%;
+  --popover-foreground: 0 0% 0%;
+  --primary: 210 100% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 75%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 0 0% 75%;
+  --muted-foreground: 0 0% 45%;
+  --accent: 0 0% 75%;
+  --accent-foreground: 0 0% 0%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 60%;
+  --input: 0 0% 75%;
+  --ring: 210 100% 40%;
+  --radius: 0;
+  font-family: "VT323", "MS Sans Serif", "Segoe UI", Tahoma, sans-serif;
+}
+
+/* Classic style - Dark mode */
+:root[class~="dark"][data-style="classic"] {
+  --background: 0 0% 20%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 25%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 25%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 210 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 25%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 25%;
+  --muted-foreground: 0 0% 65%;
+  --accent: 0 0% 25%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 35%;
+  --input: 0 0% 25%;
+  --ring: 210 100% 50%;
+  --radius: 0;
+  font-family: "VT323", "MS Sans Serif", "Segoe UI", Tahoma, sans-serif;
+}
+
+/* Classic style - Additional styles */
+:root[data-style="classic"] {
+  & .card,
+  & .dialog-content,
+  & .select-content,
+  & button,
+  & input,
+  & .select-trigger {
+    box-shadow: 
+      inset -1px -1px 0 0 hsl(0 0% 0%),
+      inset 1px 1px 0 0 hsl(0 0% 100%),
+      inset -2px -2px 0 1px hsl(0 0% 45%),
+      inset 2px 2px 0 1px hsl(0 0% 87%);
+  }
+
+  & button:active {
+    box-shadow: 
+      inset 1px 1px 0 0 hsl(0 0% 0%),
+      inset -1px -1px 0 0 hsl(0 0% 100%),
+      inset 2px 2px 0 1px hsl(0 0% 45%),
+      inset -2px -2px 0 1px hsl(0 0% 87%);
+  }
+
+  & [role="switch"] {
+    background: hsl(var(--secondary));
+    border-radius: 0;
+  }
+
+  & [role="switch"][data-state="checked"] {
+    background: hsl(var(--primary));
+  }
+
+  & [role="switch"] span {
+    background: hsl(var(--background));
+    border-radius: 0;
+    box-shadow: 
+      inset -1px -1px 0 0 hsl(0 0% 100%),
+      inset 1px 1px 0 0 hsl(0 0% 0%),
+      inset -2px -2px 0 1px hsl(0 0% 87%),
+      inset 2px 2px 0 1px hsl(0 0% 45%);
+  }
+
+  & [role="tablist"] {
+    background: hsl(var(--accent));
+    padding: 2px;
+    box-shadow: 
+      inset -1px -1px 0 0 hsl(0 0% 100%),
+      inset 1px 1px 0 0 hsl(0 0% 0%),
+      inset -2px -2px 0 1px hsl(0 0% 87%),
+      inset 2px 2px 0 1px hsl(0 0% 45%);
+  }
+
+  & [role="tab"] {
+    box-shadow: 
+      inset -1px -1px 0 0 hsl(0 0% 0%),
+      inset 1px 1px 0 0 hsl(0 0% 100%),
+      inset -2px -2px 0 1px hsl(0 0% 45%),
+      inset 2px 2px 0 1px hsl(0 0% 87%);
+  }
+
+  & [role="tab"][data-state="active"] {
+    background: hsl(var(--background));
+    box-shadow: 
+      inset 1px 1px 0 0 hsl(0 0% 0%),
+      inset -1px -1px 0 0 hsl(0 0% 100%),
+      inset 2px 2px 0 1px hsl(0 0% 45%),
+      inset -2px -2px 0 1px hsl(0 0% 87%);
+  }
+}
+
+/* Arcade style - Light mode */
+:root[data-style="arcade"] {
+  --background: 240 20% 15%;
+  --foreground: 150 50% 95%;
+  --card: 240 20% 20%;
+  --card-foreground: 150 50% 95%;
+  --popover: 240 20% 20%;
+  --popover-foreground: 150 50% 95%;
+  --primary: 265 89% 78%;
+  --primary-foreground: 240 20% 15%;
+  --secondary: 280 85% 65%;
+  --secondary-foreground: 240 20% 15%;
+  --muted: 240 20% 25%;
+  --muted-foreground: 150 50% 80%;
+  --accent: 280 85% 65%;
+  --accent-foreground: 240 20% 15%;
+  --destructive: 0 90% 65%;
+  --destructive-foreground: 150 50% 95%;
+  --border: 265 89% 78%;
+  --input: 240 20% 25%;
+  --ring: 265 89% 78%;
+  --radius: 0;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+}
+
+/* Arcade style - Dark mode */
+:root[class~="dark"][data-style="arcade"] {
+  --background: 240 20% 10%;
+  --foreground: 150 50% 95%;
+  --card: 240 20% 15%;
+  --card-foreground: 150 50% 95%;
+  --popover: 240 20% 15%;
+  --popover-foreground: 150 50% 95%;
+  --primary: 265 89% 78%;
+  --primary-foreground: 240 20% 10%;
+  --secondary: 280 85% 65%;
+  --secondary-foreground: 240 20% 10%;
+  --muted: 240 20% 20%;
+  --muted-foreground: 150 50% 80%;
+  --accent: 280 85% 65%;
+  --accent-foreground: 240 20% 10%;
+  --destructive: 0 90% 65%;
+  --destructive-foreground: 150 50% 95%;
+  --border: 265 89% 78%;
+  --input: 240 20% 20%;
+  --ring: 265 89% 78%;
+  --radius: 0;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+}
+
+/* Arcade style - Additional styles */
+:root[data-style="arcade"] {
+  & .card,
+  & .dialog-content,
+  & .select-content,
+  & button,
+  & input,
+  & .select-trigger {
+    border: 4px solid hsl(var(--border));
+    box-shadow: 
+      4px 4px 0 0 hsl(var(--border)),
+      inset 2px 2px 0 0 rgba(255, 255, 255, 0.2),
+      inset -2px -2px 0 0 rgba(0, 0, 0, 0.2);
+  }
+
+  & button:active {
+    transform: translate(2px, 2px);
+    box-shadow: 
+      2px 2px 0 0 hsl(var(--border)),
+      inset 2px 2px 0 0 rgba(0, 0, 0, 0.2),
+      inset -2px -2px 0 0 rgba(255, 255, 255, 0.2);
+  }
+
+  & [role="switch"] {
+    background: hsl(var(--muted));
+    border: 4px solid hsl(var(--border));
+  }
+
+  & [role="switch"][data-state="checked"] {
+    background: hsl(var(--primary));
+  }
+
+  & [role="switch"] span {
+    background: hsl(var(--background));
+    border: 2px solid hsl(var(--border));
+    box-shadow: 
+      inset 2px 2px 0 0 rgba(0, 0, 0, 0.2),
+      inset -2px -2px 0 0 rgba(255, 255, 255, 0.2);
+  }
+
+  & [role="tablist"] {
+    background: hsl(var(--muted));
+    border: 4px solid hsl(var(--border));
+    padding: 4px;
+    gap: 4px;
+  }
+
+  & [role="tab"] {
+    font-size: 0.75rem;
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+    padding: 0.5rem 1rem;
+  }
+
+  & [role="tab"][data-state="active"] {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    transform: translate(2px, 2px);
+    box-shadow: 
+      2px 2px 0 0 hsl(var(--border)),
+      inset 2px 2px 0 0 rgba(0, 0, 0, 0.2),
+      inset -2px -2px 0 0 rgba(255, 255, 255, 0.2);
+  }
+
+  & .frequency-display {
+    font-size: 2rem;
+    line-height: 1;
+    letter-spacing: -0.05em;
+    text-shadow: 2px 2px 0 hsl(var(--border));
   }
 }
 

@@ -79,6 +79,8 @@ export default function ClientApp() {
                       <SelectContent>
                         <SelectItem value="default">Default</SelectItem>
                         <SelectItem value="typewriter">Typewriter</SelectItem>
+                        <SelectItem value="classic">Classic</SelectItem>
+                        <SelectItem value="arcade">Arcade</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
