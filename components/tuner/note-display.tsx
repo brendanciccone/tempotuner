@@ -12,7 +12,7 @@ export function NoteDisplay({ note, frequency, signalDetected, tuningStatus, cen
   const getNoteDisplayColor = () => {
     if (!signalDetected || tuningStatus === null) return "text-muted-foreground opacity-50"
     if (tuningStatus === "flat" || tuningStatus === "sharp") return "text-red-500"
-    if (tuningStatus === "in-tune") return "text-green-500"
+    if (tuningStatus === "in-tune") return "text-emerald-500"
     return "text-muted-foreground opacity-70" // Fallback for any other state
   }
 

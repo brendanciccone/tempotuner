@@ -14,7 +14,7 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
   // Determine the needle and status colors consistently
   const getNeedleColor = () => {
     if (!signalDetected || tuningStatus === null) return "bg-gray-400"
-    return tuningStatus === "in-tune" ? "bg-green-500" : "bg-red-500"
+    return tuningStatus === "in-tune" ? "bg-emerald-500" : "bg-red-500"
   }
 
   return (
@@ -26,7 +26,7 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
         {/* In-tune zone indicator - wider to be more forgiving */}
         <div
           className={`absolute h-1 transition-colors duration-300 ${
-            tuningStatus === "in-tune" && signalDetected ? "bg-green-500" : "bg-muted-foreground/30"
+            tuningStatus === "in-tune" && signalDetected ? "bg-emerald-500" : "bg-muted-foreground/30"
           }`}
           style={{
             width: "20%" /* +/- 10 cents = 20% of the total width - more forgiving range */,
@@ -53,7 +53,7 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
           </div>
         )}
         {signalDetected && tuningStatus === "in-tune" && (
-          <div className="flex items-center text-green-500 transition-opacity duration-300">
+          <div className="flex items-center text-emerald-500 transition-opacity duration-300">
             <Check className="h-5 w-5 mr-1" />
             <span>In Tune</span>
           </div>
