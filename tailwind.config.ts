@@ -37,6 +37,10 @@ const config = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        "error-high-contrast": {
+          DEFAULT: "hsl(var(--error-high-contrast))",
+          foreground: "hsl(var(--error-high-contrast-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
