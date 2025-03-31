@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TempoTuner</string>
+    <string name="title_activity_main">TempoTuner</string>
+    <string name="package_name">app.tempotuner</string>
+    <string name="custom_url_scheme">app.tempotuner</string>
+    <string name="app_description">Chromatic tuner for any instrument and tap tempo to find the BPM of any song</string>
+</resources>
