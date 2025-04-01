@@ -1,0 +1,58 @@
+PODS:
+  - Capacitor (7.1.0):
+    - CapacitorCordova
+  - CapacitorCommunityKeepAwake (7.0.0):
+    - Capacitor
+  - CapacitorCordova (7.1.0)
+  - CapacitorDevice (7.0.0):
+    - Capacitor
+  - CapacitorPreferences (7.0.0):
+    - Capacitor
+  - CapacitorScreenOrientation (7.0.0):
+    - Capacitor
+  - CapacitorSplashScreen (7.0.0):
+    - Capacitor
+  - CapacitorStatusBar (7.0.0):
+    - Capacitor
+
+DEPENDENCIES:
+  - "Capacitor (from `../../node_modules/.pnpm/@capacitor+ios@7.1.0_@capacitor+core@7.1.0/node_modules/@capacitor/ios`)"
+  - "CapacitorCommunityKeepAwake (from `../../node_modules/.pnpm/@capacitor-community+keep-awake@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor-community/keep-awake`)"
+  - "CapacitorCordova (from `../../node_modules/.pnpm/@capacitor+ios@7.1.0_@capacitor+core@7.1.0/node_modules/@capacitor/ios`)"
+  - "CapacitorDevice (from `../../node_modules/.pnpm/@capacitor+device@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/device`)"
+  - "CapacitorPreferences (from `../../node_modules/.pnpm/@capacitor+preferences@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/preferences`)"
+  - "CapacitorScreenOrientation (from `../../node_modules/.pnpm/@capacitor+screen-orientation@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/screen-orientation`)"
+  - "CapacitorSplashScreen (from `../../node_modules/.pnpm/@capacitor+splash-screen@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/splash-screen`)"
+  - "CapacitorStatusBar (from `../../node_modules/.pnpm/@capacitor+status-bar@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/status-bar`)"
+
+EXTERNAL SOURCES:
+  Capacitor:
+    :path: "../../node_modules/.pnpm/@capacitor+ios@7.1.0_@capacitor+core@7.1.0/node_modules/@capacitor/ios"
+  CapacitorCommunityKeepAwake:
+    :path: "../../node_modules/.pnpm/@capacitor-community+keep-awake@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor-community/keep-awake"
+  CapacitorCordova:
+    :path: "../../node_modules/.pnpm/@capacitor+ios@7.1.0_@capacitor+core@7.1.0/node_modules/@capacitor/ios"
+  CapacitorDevice:
+    :path: "../../node_modules/.pnpm/@capacitor+device@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/device"
+  CapacitorPreferences:
+    :path: "../../node_modules/.pnpm/@capacitor+preferences@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/preferences"
+  CapacitorScreenOrientation:
+    :path: "../../node_modules/.pnpm/@capacitor+screen-orientation@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/screen-orientation"
+  CapacitorSplashScreen:
+    :path: "../../node_modules/.pnpm/@capacitor+splash-screen@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/splash-screen"
+  CapacitorStatusBar:
+    :path: "../../node_modules/.pnpm/@capacitor+status-bar@7.0.0_@capacitor+core@7.1.0/node_modules/@capacitor/status-bar"
+
+SPEC CHECKSUMS:
+  Capacitor: bceb785fb78f5e81e4a9e37843bc1c24bd9c7194
+  CapacitorCommunityKeepAwake: ae762ce29b53147d28cfcaae5273cd1db0c38fc4
+  CapacitorCordova: 866217f32c1d25b326c568a10ea3ed0c36b13e29
+  CapacitorDevice: 069faf433b3a99c3d5f0e500fbe634f60a8c6a84
+  CapacitorPreferences: 8e4bef1f937fc991a19d7ea99330c36a62edd24b
+  CapacitorScreenOrientation: 45e36e1121cdba1634eb12077c5e99391055116f
+  CapacitorSplashScreen: 7e7a0a1113833032f196b3af6fa437baccacf5bc
+  CapacitorStatusBar: a8c4c83ed2e973bdafb979e80e4b00d027832cb7
+
+PODFILE CHECKSUM: 6949863ab3858f286fb3a213196aa6a5f6fe0ce6
+
+COCOAPODS: 1.16.2
