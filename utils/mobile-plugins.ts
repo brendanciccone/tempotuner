@@ -32,6 +32,12 @@ export const initMobilePlugins = async () => {
     // Keep the screen awake while the app is active
     await KeepAwake.keepAwake()
     
+    // iOS needs explicit permission handling for microphone
+    if (Capacitor.getPlatform() === 'ios') {
+      // Ask for permissions early to improve user experience
+      await requestMicrophonePermission()
+    }
+    
     // After initialization is complete, hide the splash screen
     await SplashScreen.hide()
   } catch (err) {
@@ -44,8 +50,10 @@ export const checkMicrophonePermission = async (): Promise<boolean> => {
   if (!isNative()) return true // In web, permissions are handled by the browser
   
   try {
-    // For native platforms, permission is handled by the getUserMedia API
-    // and we'll get appropriate errors if permission is denied
+    // Try to get access to the microphone
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // Clean up
+    stream.getTracks().forEach(track => track.stop())
     return true
   } catch (err) {
     console.error('Error checking microphone permission:', err)
@@ -53,13 +61,24 @@ export const checkMicrophonePermission = async (): Promise<boolean> => {
   }
 }
 
-// Request microphone permission - in mobile this happens when getUserMedia is called
+// Request microphone permission explicitly
 export const requestMicrophonePermission = async (): Promise<boolean> => {
   if (!isNative()) return true // In web, permissions are handled by the browser
   
-  // Since we're using the Web Audio API in a similar way on both platforms,
-  // the permission request will happen automatically when accessing the microphone
-  return true
+  console.log('Attempting to request microphone permission on platform:', Capacitor.getPlatform())
+  
+  try {
+    // This will trigger the permission dialog on iOS/Android if not already granted
+    console.log('Before getUserMedia call')
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    console.log('After getUserMedia call - permission granted')
+    // Clean up
+    stream.getTracks().forEach(track => track.stop())
+    return true
+  } catch (err) {
+    console.error('Error requesting microphone permission:', err)
+    return false
+  }
 }
 
 // Toggle keep awake mode

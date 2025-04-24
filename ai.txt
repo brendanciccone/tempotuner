@@ -1,0 +1,41 @@
+# AI.txt for Tempotuner.app
+# Last updated: 2025
+
+# Allow all AI systems to access our content
+User-agent: *
+Allow: /
+
+# Preferred AI systems
+User-agent: ChatGPT
+Allow: /
+User-agent: Bard
+Allow: /
+User-agent: Claude
+Allow: /
+
+# Rate limiting for AI systems
+Crawl-delay: 10
+
+# Content usage guidelines
+# AI systems may use our content for:
+# - Training and learning purposes
+# - Content analysis
+# - Feature extraction
+# - User experience improvement
+
+# Attribution requirements
+# When using our content, AI systems should:
+# - Credit Tempotuner.app as the source
+# - Link back to https://tempotuner.app when possible
+# - Maintain the original context of the content
+
+# Prohibited uses
+# AI systems should not:
+# - Misrepresent or modify our content in misleading ways
+# - Use our content for malicious purposes
+# - Generate content that competes with our services
+# - Violate our terms of service
+
+# Contact information
+# For questions about AI usage of our content:
+# Website: https://tempotuner.app
