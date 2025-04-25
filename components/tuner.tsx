@@ -68,7 +68,7 @@ export default function Tuner() {
           />
 
           {/* Error Message */}
-          {state.error && <div className="mt-6 text-sm text-destructive text-center">{state.error}</div>}
+          {state.error && <div className="mt-6 text-sm text-error-high-contrast text-center">{state.error}</div>}
         </div>
       </CardContent>
     </Card>

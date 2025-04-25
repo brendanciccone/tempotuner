@@ -1,5 +1,7 @@
 // Core audio processing utilities
 import { detectLowFrequencySignal, detectPitchZeroCrossing, detectPitchYIN } from "@/utils/audio-processing"
+import { requestMicrophonePermission, isNative, checkMicrophonePermission } from "@/utils/mobile-plugins"
+import { Capacitor } from '@capacitor/core'
 
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null
@@ -16,15 +18,29 @@ export class AudioAnalyzer {
 
   async initialize(): Promise<boolean> {
     try {
+      // First explicitly request microphone permissions on iOS
+      if (isNative() && Capacitor.getPlatform() === 'ios') {
+        console.log('AudioAnalyzer: Requesting microphone permission for iOS')
+        const permissionGranted = await requestMicrophonePermission()
+        console.log('AudioAnalyzer: Permission request result:', permissionGranted)
+        if (!permissionGranted) {
+          this.onError("Microphone access denied. Please allow microphone access in your device settings.")
+          return false
+        }
+      }
+
       // Create audio context with proper fallbacks
       if (!this.audioContext) {
+        console.log('AudioAnalyzer: Creating new AudioContext')
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
       } else if (this.audioContext.state === "suspended") {
+        console.log('AudioAnalyzer: Resuming suspended AudioContext')
         await this.audioContext.resume()
       }
 
       // Request microphone access with explicit error handling
       if (!this.stream) {
+        console.log('AudioAnalyzer: Requesting microphone stream')
         this.stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: false,
@@ -32,6 +48,7 @@ export class AudioAnalyzer {
             autoGainControl: false,
           },
         })
+        console.log('AudioAnalyzer: Microphone stream obtained successfully')
       }
 
       // Set up analyzer with optimized settings for better frequency detection
