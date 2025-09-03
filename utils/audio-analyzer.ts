@@ -1,7 +1,6 @@
 // Core audio processing utilities
 import { detectLowFrequencySignal, detectPitchZeroCrossing, detectPitchYIN } from "@/utils/audio-processing"
-import { requestMicrophonePermission, isNative, checkMicrophonePermission } from "@/utils/mobile-plugins"
-import { Capacitor } from '@capacitor/core'
+// Browser-only: microphone permissions handled via getUserMedia
 
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null
@@ -18,17 +17,6 @@ export class AudioAnalyzer {
 
   async initialize(): Promise<boolean> {
     try {
-      // First explicitly request microphone permissions on iOS
-      if (isNative() && Capacitor.getPlatform() === 'ios') {
-        console.log('AudioAnalyzer: Requesting microphone permission for iOS')
-        const permissionGranted = await requestMicrophonePermission()
-        console.log('AudioAnalyzer: Permission request result:', permissionGranted)
-        if (!permissionGranted) {
-          this.onError("Microphone access denied. Please allow microphone access in your device settings.")
-          return false
-        }
-      }
-
       // Create audio context with proper fallbacks
       if (!this.audioContext) {
         console.log('AudioAnalyzer: Creating new AudioContext')

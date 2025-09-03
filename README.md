@@ -1,6 +1,6 @@
 # TempoTuner
 
-A tuner and metronome web application using the Web Audio API, built with Next.js and Capacitor for cross-platform distribution.
+A tuner and metronome web application using the Web Audio API, built with Next.js.
 
 ## 🚀 Features
 
@@ -8,7 +8,6 @@ A tuner and metronome web application using the Web Audio API, built with Next.j
 - **Tap Tempo**: Calculate BPM by tapping the screen
 - **Multiple Visual Styles**: Choose from different UI themes
 - **Fully Responsive**: Works on mobile and desktop devices
-- **Native App Capabilities**: When built with Capacitor
 - Modern, responsive UI built with TailwindCSS and Shadcn/UI components
 - Dark/Light mode support with next-themes
 - Fully accessible components using Radix UI
@@ -21,7 +20,6 @@ A tuner and metronome web application using the Web Audio API, built with Next.j
 - **UI Components:** Shadcn/UI (Radix UI)
 - **Form Handling:** React Hook Form + Zod
 - **Audio Processing:** Web Audio API
-- **Cross-Platform:** Capacitor
 - **Package Manager:** PNPM
 - **Analytics:** Vercel Analytics
 - **Icons:** Lucide React
@@ -30,8 +28,6 @@ A tuner and metronome web application using the Web Audio API, built with Next.j
 
 - Node.js 18+
 - PNPM 8+
-- For iOS: Xcode, CocoaPods
-- For Android: Android Studio, Java Development Kit
 
 ## 🚀 Getting Started
 
@@ -56,33 +52,7 @@ pnpm dev
 pnpm build
 ```
 
-### Mobile Development with Capacitor
-
-This project uses Capacitor to build iOS and Android apps from the web codebase.
-
-```bash
-# Build the web app and sync with Capacitor
-pnpm build:mobile
-
-# Add iOS platform (only needed once)
-pnpm cap:ios
-
-# Add Android platform (only needed once)
-pnpm cap:android
-
-# Sync latest web code with native projects
-pnpm cap:sync
-
-# Open the project in Xcode
-pnpm cap:open:ios
-
-# Open the project in Android Studio
-pnpm cap:open:android
-
-# Quick commands to build and open in IDE
-pnpm ios
-pnpm android
-```
+<!-- Mobile build instructions removed. Project is now web-only. -->
 
 ## 📝 Available Scripts
 
@@ -90,9 +60,6 @@ pnpm android
 - `pnpm build` - Build the application for production
 - `pnpm start` - Start the production server
 - `pnpm lint` - Run ESLint for code linting
-- `pnpm build:mobile` - Build for mobile and sync with Capacitor
-- `pnpm ios` - Build and open iOS project in Xcode
-- `pnpm android` - Build and open Android project in Android Studio
 
 ## 🏗️ Project Structure
 
@@ -106,10 +73,7 @@ tempotuner/
 │   ├── tuner/        # Tuner components
 │   ├── ui/           # Shadcn UI components
 ├── hooks/            # Custom React hooks
-├── utils/            # Helper functions
-│   └── audio-analyzer.ts # Audio processing logic
-├── ios/              # iOS native project
-├── android/          # Android native project 
+├── utils/            # Helper functions (e.g., audio processing)
 ├── public/           # Static assets
 └── styles/           # Global styles
 ```
@@ -120,22 +84,7 @@ tempotuner/
 
 Deploy the `out` directory to your favorite static hosting service.
 
-### iOS App Store Deployment
-
-1. Build the project using `pnpm ios`
-2. In Xcode, select a development team
-3. Update the app bundle identifier if needed
-4. Create app icons and splash screens
-5. Configure app settings in App Store Connect
-6. Archive and upload to App Store Connect
-
-### Android Play Store Deployment
-
-1. Build the project using `pnpm android`
-2. In Android Studio, update the app details in `android/app/build.gradle`
-3. Create app icons and splash screens
-4. Generate a signed APK or App Bundle
-5. Upload to Google Play Console
+<!-- Mobile deployment instructions removed. Web-only deployment supported. -->
 
 ## 🤝 Contributing
 
@@ -151,7 +100,6 @@ Deploy the `out` directory to your favorite static hosting service.
 - [TailwindCSS](https://tailwindcss.com/)
 - [Shadcn/UI](https://ui.shadcn.com/)
 - [Radix UI](https://www.radix-ui.com/)
-- [Capacitor](https://capacitorjs.com/)
 
 ## License
 

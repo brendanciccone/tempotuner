@@ -21,50 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { initMobilePlugins, isNative, toggleKeepAwake } from "@/utils/mobile-plugins"
-import { Capacitor } from "@capacitor/core"
 
 export default function ClientApp() {
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<"tempo" | "tuner">("tuner")
   const [selectedStyle, setSelectedStyle] = useState("default")
-  const [isAndroid, setIsAndroid] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    
-    // Check if running on Android
-    if (isNative() && Capacitor.getPlatform() === 'android') {
-      setIsAndroid(true)
-    }
   }, [])
-
-  // Initialize mobile plugins when component mounts
-  useEffect(() => {
-    if (mounted) {
-      const setupMobile = async () => {
-        try {
-          if (isNative()) {
-            await initMobilePlugins()
-            await toggleKeepAwake(true)
-          }
-        } catch (error) {
-          console.error("Error initializing mobile plugins:", error)
-        }
-      }
-      
-      setupMobile()
-      
-      // Clean up when component unmounts
-      return () => {
-        if (isNative()) {
-          toggleKeepAwake(false).catch(err => 
-            console.error("Error disabling keep awake:", err)
-          )
-        }
-      }
-    }
-  }, [mounted])
 
   // Apply the selected style to the root element
   useEffect(() => {
@@ -77,7 +42,7 @@ export default function ClientApp() {
   }
 
   return (
-    <main className={`flex min-h-screen flex-col bg-background ${isAndroid ? 'pt-9' : 'p-4'} sm:p-6`}>
+    <main className={`flex min-h-screen flex-col bg-background p-4 sm:p-6`}>
       <div className="w-full max-w-[340px] sm:max-w-sm md:max-w-md mx-auto">
         <div className="flex justify-between items-center mb-4 sm:mb-6">
           <div className="flex items-center gap-2">
