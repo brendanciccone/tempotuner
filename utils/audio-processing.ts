@@ -198,63 +198,96 @@ export const detectPitchZeroCrossing = (buffer: Float32Array, sampleRate: number
 
 // Improved YIN algorithm for better pitch detection
 export const detectPitchYIN = (buffer: Float32Array, sampleRate: number): number => {
-  const threshold = 0.05 // Lower threshold for higher accuracy (was 0.07)
-  const bufferSize = buffer.length
-  const yinBuffer = new Float32Array(bufferSize / 2)
-
-  // Step 1: Calculate difference function with improved accuracy
-  const step = 1 // Reduced step for better accuracy (was 2)
-  for (let t = 0; t < yinBuffer.length; t++) {
-    yinBuffer[t] = 0
-    for (let i = 0; i < yinBuffer.length; i += step) {
-      if (i + t < buffer.length) {
-        const delta = buffer[i] - buffer[i + t]
-        yinBuffer[t] += delta * delta
-      }
-    }
-    // Adjust for the step
-    yinBuffer[t] *= step
+  // Early exit for silence or near-silence to save CPU
+  const rms = getRMS(buffer)
+  if (rms < 0.0008) {
+    return 0
   }
 
-  // Step 2: Cumulative normalization with improved handling of edge cases
+  // Remove DC offset to improve autocorrelation quality
+  const bufferSize = buffer.length
+  let mean = 0
+  for (let i = 0; i < bufferSize; i++) {
+    mean += buffer[i]
+  }
+  mean /= bufferSize
+
+  // Use a normalized working buffer without DC component
+  const work = new Float32Array(bufferSize)
+  for (let i = 0; i < bufferSize; i++) {
+    work[i] = buffer[i] - mean
+  }
+
+  // Allocate YIN buffer once per call for the needed tau range
+  const maxLag = Math.floor(bufferSize / 2)
+  const yinBuffer = new Float32Array(maxLag)
+
+  // Limit tau to a musically sensible range to reduce complexity
+  const minFreq = Math.max(30, MIN_FREQUENCY) // avoid ultra-low that won't fit current window reliably
+  const maxFreq = Math.min(2000, MAX_FREQUENCY) // typical upper bound for fundamental detection
+  const tauMin = Math.max(2, Math.floor(sampleRate / maxFreq))
+  const tauMax = Math.min(maxLag - 1, Math.floor(sampleRate / minFreq))
+
+  if (tauMin >= tauMax) {
+    return 0
+  }
+
+  // Step 1: Difference function (optimized range and adaptive inner step)
+  // Use a slightly larger inner step at high sample rates to reduce CPU
+  const innerStep = sampleRate >= 48000 ? 2 : 1
+  for (let tau = tauMin; tau <= tauMax; tau++) {
+    let sum = 0
+    // Compute squared difference between the signal and a delayed version
+    for (let i = 0; i + tau < bufferSize; i += innerStep) {
+      const delta = work[i] - work[i + tau]
+      sum += delta * delta
+    }
+    yinBuffer[tau] = sum * innerStep // compensate for skipped samples
+  }
+
+  // Step 2: Cumulative mean normalized difference function (CMNDF)
+  const threshold = 0.05
   let runningSum = 0
   yinBuffer[0] = 1
-  for (let t = 1; t < yinBuffer.length; t++) {
-    runningSum += yinBuffer[t]
-    if (runningSum > 0) {
-      yinBuffer[t] *= t / runningSum
-    } else {
-      yinBuffer[t] = 1
+  for (let tau = 1; tau <= tauMax; tau++) {
+    // If we didn't compute this tau (below tauMin), keep it as 1 to ignore
+    if (tau < tauMin) {
+      yinBuffer[tau] = 1
+      continue
     }
+
+    runningSum += yinBuffer[tau]
+    if (runningSum === 0) {
+      yinBuffer[tau] = 1
+      continue
+    }
+    yinBuffer[tau] = (yinBuffer[tau] * tau) / runningSum
   }
 
-  // Step 3: Find the best local minimum
-  // Skip the first few bins which often contain noise
-  const minTau = findBestLocalMinimum(yinBuffer, threshold)
-  
+  // Step 3: Find best local minimum within [tauMin, tauMax]
+  const minTau = findBestLocalMinimum(yinBuffer, threshold, tauMin, tauMax)
   if (minTau > 0) {
-    // Apply parabolic interpolation for higher precision
+    // Parabolic refinement for sub-sample precision
     const betterTau = refinePitchEstimate(yinBuffer, minTau)
     return sampleRate / betterTau
   }
 
-  return 0 // No pitch detected
+  return 0
 }
 
 // Helper function to find the best local minimum in the YIN buffer
-const findBestLocalMinimum = (yinBuffer: Float32Array, threshold: number): number => {
+const findBestLocalMinimum = (yinBuffer: Float32Array, threshold: number, tauMin: number, tauMax: number): number => {
   let minValue = 1
   let minTau = -1
-  
-  // Start from a lower index for better low frequency detection
-  // But skip the very first few indices which are often noisy
-  for (let t = 2; t < yinBuffer.length; t++) {
+
+  // Scan only the valid tau range
+  for (let t = Math.max(2, tauMin); t <= tauMax; t++) {
     if (yinBuffer[t] < threshold) {
-      // Find the actual minimum in this valley
+      // Descend to the local minimum within this valley
       let localMinValue = yinBuffer[t]
       let localMinTau = t
 
-      while (t + 1 < yinBuffer.length && yinBuffer[t + 1] < yinBuffer[t]) {
+      while (t + 1 <= tauMax && yinBuffer[t + 1] < yinBuffer[t]) {
         t++
         if (yinBuffer[t] < localMinValue) {
           localMinValue = yinBuffer[t]
@@ -262,15 +295,15 @@ const findBestLocalMinimum = (yinBuffer: Float32Array, threshold: number): numbe
         }
       }
 
-      // Found a minimum below threshold
       return localMinTau
-    } else if (yinBuffer[t] < minValue) {
+    }
+
+    if (yinBuffer[t] < minValue) {
       minValue = yinBuffer[t]
       minTau = t
     }
   }
 
-  // If no value found below threshold, use the best minimum we found
   return minTau
 }
 

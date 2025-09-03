@@ -41,8 +41,9 @@ export class AudioAnalyzer {
 
       // Set up analyzer with optimized settings for better frequency detection
       this.analyser = this.audioContext.createAnalyser()
-      this.analyser.fftSize = 4096 // Further reduced for faster response and better performance
-      this.analyser.smoothingTimeConstant = 0.2 // Further reduced for better responsiveness
+      // Use 2048 to reduce CPU, still sufficient for low notes when using time-domain YIN
+      this.analyser.fftSize = 2048
+      this.analyser.smoothingTimeConstant = 0.15 // slightly lower for quicker visual response
 
       // Connect audio source to analyzer
       this.source = this.audioContext.createMediaStreamSource(this.stream)

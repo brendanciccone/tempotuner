@@ -31,8 +31,9 @@ export const findClosestNote = (frequency: number, referenceFreq: number, useFla
   const octave = Math.floor((midiNote - 12) / 12)
 
   // Calculate the note index within the octave (0 = C, 1 = C#/Db, etc.)
-  const noteIndex = (midiNote - 12) % 12
-  if (noteIndex < 0 || noteIndex >= 12) {
+  const positiveMod = (n: number, m: number) => ((n % m) + m) % m
+  const noteIndex = positiveMod(midiNote - 12, 12)
+  if (noteIndex < 0 || noteIndex >= 12 || !Number.isFinite(noteIndex)) {
     return {
       note: "?",
       noteName: "?",
