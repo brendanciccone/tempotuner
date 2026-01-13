@@ -11,7 +11,7 @@ A simple tuner and metronome web app. Uses the Web Audio API to detect pitch in 
 
 ## Tech
 
-Built with Next.js 15, TypeScript, TailwindCSS, and Shadcn/UI components. Audio processing uses the Web Audio API.
+Built with Next.js 16, TypeScript, TailwindCSS, and Shadcn/UI components. Audio processing uses the Web Audio API.
 
 ## Setup
 
