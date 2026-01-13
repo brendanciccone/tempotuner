@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import Image from "next/image"
-import { ThemeToggle } from "@/components/theme-toggle"
 import TapTempo from "@/components/tap-tempo"
 import Tuner from "@/components/tuner"
 import { Button } from "@/components/ui/button"
@@ -57,7 +56,6 @@ export default function ClientApp() {
             <p className="text-xs sm:text-sm text-muted-foreground"></p>
           </div>
           <div className="flex items-center gap-2">
-            <ThemeToggle />
             <Dialog>
               <DialogTrigger asChild>
                 <Button variant="outline" size="icon" className="rounded-full">

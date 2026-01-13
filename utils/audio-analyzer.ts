@@ -1,34 +1,52 @@
-// Core audio processing utilities
-import { detectLowFrequencySignal, detectPitchZeroCrossing, detectPitchYIN } from "@/utils/audio-processing"
-// Browser-only: microphone permissions handled via getUserMedia
+import { detectPitchYIN, getRMS } from "@/utils/audio-processing"
 
+/**
+ * AudioAnalyzer class handles microphone input and pitch detection
+ * 
+ * Uses a larger FFT size (4096) for better low-frequency detection.
+ * At 44100Hz sample rate:
+ * - 4096 samples = ~93ms of audio
+ * - Minimum detectable frequency = 44100/4096 ≈ 10.8Hz
+ * - This supports all standard instrument tuning ranges
+ */
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null
   private analyser: AnalyserNode | null = null
   private source: MediaStreamAudioSourceNode | null = null
   private stream: MediaStream | null = null
-  private buffer: Float32Array | null = null
+  private buffer: Float32Array<ArrayBuffer> | null = null
   private isInitialized = false
   private onError: (message: string) => void
+
+  // FFT size of 4096 provides good balance between:
+  // - Frequency resolution for low notes (E2 = 82.4Hz needs good resolution)
+  // - Latency (4096 samples at 44100Hz ≈ 93ms)
+  private readonly FFT_SIZE = 4096
 
   constructor(onError: (message: string) => void) {
     this.onError = onError
   }
 
+  /**
+   * Initialize the audio context and microphone access
+   * Returns true on success, false on failure
+   */
   async initialize(): Promise<boolean> {
     try {
       // Create audio context with proper fallbacks
       if (!this.audioContext) {
-        console.log('AudioAnalyzer: Creating new AudioContext')
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+        console.log("AudioAnalyzer: Creating new AudioContext")
+        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+        this.audioContext = new AudioContextClass()
       } else if (this.audioContext.state === "suspended") {
-        console.log('AudioAnalyzer: Resuming suspended AudioContext')
+        console.log("AudioAnalyzer: Resuming suspended AudioContext")
         await this.audioContext.resume()
       }
 
-      // Request microphone access with explicit error handling
+      // Request microphone access with settings optimized for pitch detection
+      // Disable all processing that could interfere with pitch detection
       if (!this.stream) {
-        console.log('AudioAnalyzer: Requesting microphone stream')
+        console.log("AudioAnalyzer: Requesting microphone stream")
         this.stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: false,
@@ -36,20 +54,20 @@ export class AudioAnalyzer {
             autoGainControl: false,
           },
         })
-        console.log('AudioAnalyzer: Microphone stream obtained successfully')
+        console.log("AudioAnalyzer: Microphone stream obtained successfully")
       }
 
-      // Set up analyzer with optimized settings for better frequency detection
+      // Set up analyzer with optimized settings for pitch detection
       this.analyser = this.audioContext.createAnalyser()
-      // Use 2048 to reduce CPU, still sufficient for low notes when using time-domain YIN
-      this.analyser.fftSize = 2048
-      this.analyser.smoothingTimeConstant = 0.15 // slightly lower for quicker visual response
+      this.analyser.fftSize = this.FFT_SIZE
+      // Low smoothing for responsive pitch tracking
+      this.analyser.smoothingTimeConstant = 0
 
       // Connect audio source to analyzer
       this.source = this.audioContext.createMediaStreamSource(this.stream)
       this.source.connect(this.analyser)
 
-      // Create buffer for analysis
+      // Create buffer for analysis (time-domain data for YIN algorithm)
       this.buffer = new Float32Array(this.analyser.fftSize)
 
       this.isInitialized = true
@@ -61,52 +79,47 @@ export class AudioAnalyzer {
     }
   }
 
-  getAudioData(): Float32Array | null {
+  /**
+   * Get the current audio buffer (time-domain data)
+   * Returns null if not initialized
+   */
+  getAudioData(): Float32Array<ArrayBuffer> | null {
     if (!this.isInitialized || !this.analyser || !this.buffer) return null
 
     this.analyser.getFloatTimeDomainData(this.buffer)
     return this.buffer
   }
 
+  /**
+   * Get the sample rate of the audio context
+   */
   getSampleRate(): number {
     return this.audioContext?.sampleRate || 44100
   }
 
-  // Detect pitch using optimized algorithm selection for guitar strings
-  detectPitch(buffer: Float32Array): number {
-    if (!this.audioContext) return 0
-
-    const sampleRate = this.audioContext.sampleRate
-    
-    // For guitar tuning, use different algorithms based on frequency ranges
-    // Zero-crossing works better for low E and A (below 110Hz)
-    // YIN works better for mid to high frequencies
-    const isLowFrequency = detectLowFrequencySignal(buffer, sampleRate)
-    
-    if (isLowFrequency) {
-      // Use zero-crossing for low frequencies (E, A strings)
-      return detectPitchZeroCrossing(buffer, sampleRate)
-    } else {
-      // For mid to high frequencies, use YIN with optimized parameters
-      const yinFrequency = detectPitchYIN(buffer, sampleRate)
-      
-      // For mid-range frequencies (100-300Hz), cross-check with zero-crossing
-      // This helps correct potential errors in either algorithm
-      if (yinFrequency > 100 && yinFrequency < 300) {
-        const zcFrequency = detectPitchZeroCrossing(buffer, sampleRate)
-        
-        // If both algorithms detected something in a similar range, average them
-        // This helps eliminate the tendency to be sharp or flat
-        if (zcFrequency > 0 && Math.abs(yinFrequency - zcFrequency) / yinFrequency < 0.1) {
-          // Weighted average with more emphasis on YIN for mid-range
-          return (yinFrequency * 0.7 + zcFrequency * 0.3);
-        }
-      }
-      
-      return yinFrequency;
-    }
+  /**
+   * Get the RMS level of the current buffer
+   * Useful for signal detection
+   */
+  getCurrentRMS(): number {
+    const buffer = this.getAudioData()
+    if (!buffer) return 0
+    return getRMS(buffer)
   }
 
+  /**
+   * Detect pitch using YIN algorithm
+   * Returns frequency in Hz, or 0 if no pitch detected
+   */
+  detectPitch(buffer: Float32Array<ArrayBuffer>): number {
+    if (!this.audioContext) return 0
+    return detectPitchYIN(buffer, this.audioContext.sampleRate)
+  }
+
+  /**
+   * Clean up all resources
+   * Call this when the tuner is stopped
+   */
   cleanup(): void {
     if (this.source) {
       this.source.disconnect()
@@ -128,4 +141,3 @@ export class AudioAnalyzer {
     this.isInitialized = false
   }
 }
-

@@ -9,7 +9,8 @@ export interface NoteInfo {
   note: string
   noteName: string
   octave: number
-  frequency: number
+  frequency: number // The detected/input frequency
+  exactFrequency: number // The nominal frequency of the note (e.g., 440Hz for A4)
   cents: number
   tuningStatus: "flat" | "sharp" | "in-tune"
 }
@@ -39,6 +40,7 @@ export const findClosestNote = (frequency: number, referenceFreq: number, useFla
       noteName: "?",
       octave: 0,
       frequency,
+      exactFrequency: frequency, // Fallback to detected frequency
       cents: 0,
       tuningStatus: "in-tune",
     }
@@ -63,6 +65,7 @@ export const findClosestNote = (frequency: number, referenceFreq: number, useFla
     noteName,
     octave,
     frequency,
+    exactFrequency,
     cents,
     tuningStatus,
   }

@@ -52,7 +52,7 @@
     "formidable": "~3.5.3",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
-    "next": "15.5.2",
+    "next": "16.1.1",
     "next-themes": "^0.2.1",
     "react": "^19.1.1",
     "react-day-picker": "8.10.1",
@@ -67,11 +67,12 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.9.2"
   }
 }
