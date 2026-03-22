@@ -1,8 +1,10 @@
 // Constants for audio processing
-export const SIGNAL_THRESHOLD = 0.01 // Minimum RMS level to consider as signal
+export const SIGNAL_THRESHOLD = 0.02 // Minimum RMS level to consider as signal (raised to reduce false triggers from background noise)
 export const MIN_FREQUENCY = 27.5 // A0 - lowest piano note
 export const MAX_FREQUENCY = 4186.0 // C8 - highest piano note
-export const FREQUENCY_BUFFER_SIZE = 5 // Small buffer for median filtering
+export const FREQUENCY_BUFFER_SIZE = 9 // Median filter buffer (odd number for true median, larger = more stable)
+export const CENTS_SMOOTHING = 0.35 // EMA alpha for cents display (lower = smoother, 0.2-0.5 range)
+export const FREQUENCY_SMOOTHING = 0.4 // EMA alpha for frequency display
 
 // Calculate RMS (Root Mean Square) of the buffer to determine signal strength
 export const getRMS = (buffer: Float32Array<ArrayBuffer>): number => {
@@ -65,7 +67,7 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
 
   // Step 3: Absolute threshold
   // Find the first tau where CMNDF dips below threshold
-  const threshold = 0.1 // Relaxed threshold for better detection
+  const threshold = 0.15 // Slightly stricter threshold reduces false detections from noise
 
   // Calculate tau range based on frequency limits
   const tauMin = Math.max(2, Math.floor(sampleRate / MAX_FREQUENCY))
@@ -94,8 +96,8 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
         bestTau = tau
       }
     }
-    // Only use fallback if the minimum is reasonably low
-    if (bestValue > 0.5) {
+    // Only use fallback if the minimum is reasonably low (stricter than before)
+    if (bestValue > 0.35) {
       return 0
     }
   }
@@ -164,7 +166,7 @@ export const getMedianFrequency = (frequencies: number[]): number => {
 export const isFrequencyConsistent = (
   newFreq: number,
   recentFrequencies: number[],
-  tolerancePercent: number = 5
+  tolerancePercent: number = 8
 ): boolean => {
   if (recentFrequencies.length < 2) return true
 

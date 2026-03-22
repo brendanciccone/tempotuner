@@ -7,8 +7,8 @@ import { getRMS, MIN_FREQUENCY, MAX_FREQUENCY, SIGNAL_THRESHOLD } from "@/utils/
 import { DEFAULT_A4_FREQ } from "@/utils/note-utils"
 
 // Timing constants
-const SIGNAL_HOLD_TIME = 400 // ms to hold display after signal drops
-const ANALYSIS_INTERVAL = 50 // ms between analyses (20 fps)
+const SIGNAL_HOLD_TIME = 600 // ms to hold display after signal drops (longer hold feels less jumpy)
+const ANALYSIS_INTERVAL = 35 // ms between analyses (~28 fps, feeds EMA smoother more frequently)
 
 export interface TunerState {
   currentFrequency: number | null
