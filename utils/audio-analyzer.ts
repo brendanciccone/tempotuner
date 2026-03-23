@@ -14,9 +14,10 @@ const NOISE_FLOOR_MIN = SIGNAL_THRESHOLD // Never go below the hard minimum
  * - Minimum detectable period = 4096 samples → ~10.8Hz
  * - Supports all standard instrument tuning ranges
  *
- * Includes adaptive noise floor tracking: measures ambient RMS during
- * silence and sets the effective signal threshold relative to it. This
- * handles both quiet instruments and noisy environments automatically.
+ * iOS Safari compatibility:
+ * - Falls back to getByteTimeDomainData when getFloatTimeDomainData is missing
+ * - Handles AudioContext "interrupted" state (tab switch, lock screen)
+ * - Forces 44100Hz sample rate to avoid iOS resampling distortion
  */
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null
@@ -24,6 +25,8 @@ export class AudioAnalyzer {
   private source: MediaStreamAudioSourceNode | null = null
   private stream: MediaStream | null = null
   private buffer: Float32Array<ArrayBuffer> | null = null
+  private byteBuffer: Uint8Array<ArrayBuffer> | null = null // Fallback for iOS Safari
+  private useFloatData: boolean = true // false when getFloatTimeDomainData is unavailable
   private isInitialized = false
   private onError: (message: string) => void
 
@@ -52,9 +55,14 @@ export class AudioAnalyzer {
       if (!this.audioContext) {
         console.log("AudioAnalyzer: Creating new AudioContext")
         const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-        this.audioContext = new AudioContextClass()
-      } else if (this.audioContext.state === "suspended") {
-        console.log("AudioAnalyzer: Resuming suspended AudioContext")
+        // Force 44100Hz sample rate — iOS Safari can produce distortion
+        // when resampling between its native 48000Hz and the default rate
+        this.audioContext = new AudioContextClass({ sampleRate: 44100 })
+      }
+
+      // Handle suspended (initial) and interrupted (tab switch / lock screen) states
+      if (this.audioContext.state === "suspended" || this.audioContext.state === "interrupted" as string) {
+        console.log(`AudioAnalyzer: Resuming ${this.audioContext.state} AudioContext`)
         await this.audioContext.resume()
       }
 
@@ -82,8 +90,15 @@ export class AudioAnalyzer {
       this.source = this.audioContext.createMediaStreamSource(this.stream)
       this.source.connect(this.analyser)
 
-      // Create buffer for analysis (time-domain data for YIN algorithm)
+      // Create buffers for analysis
       this.buffer = new Float32Array(this.analyser.fftSize)
+
+      // Detect whether getFloatTimeDomainData is available (missing on iOS Safari)
+      if (typeof this.analyser.getFloatTimeDomainData !== "function") {
+        console.log("AudioAnalyzer: getFloatTimeDomainData not available, using byte fallback")
+        this.useFloatData = false
+        this.byteBuffer = new Uint8Array(this.analyser.fftSize) as Uint8Array<ArrayBuffer>
+      }
 
       this.isInitialized = true
       return true
@@ -95,13 +110,26 @@ export class AudioAnalyzer {
   }
 
   /**
-   * Get the current audio buffer (time-domain data)
+   * Get the current audio buffer (time-domain data as Float32Array)
    * Returns null if not initialized
+   *
+   * On iOS Safari where getFloatTimeDomainData doesn't exist, falls back to
+   * getByteTimeDomainData and converts unsigned bytes [0, 255] to floats [-1, 1].
    */
   getAudioData(): Float32Array<ArrayBuffer> | null {
     if (!this.isInitialized || !this.analyser || !this.buffer) return null
 
-    this.analyser.getFloatTimeDomainData(this.buffer)
+    if (this.useFloatData) {
+      this.analyser.getFloatTimeDomainData(this.buffer)
+    } else if (this.byteBuffer) {
+      // Fallback: getByteTimeDomainData returns unsigned bytes where 128 = silence
+      this.analyser.getByteTimeDomainData(this.byteBuffer)
+      for (let i = 0; i < this.byteBuffer.length; i++) {
+        // Convert [0, 255] → [-1.0, 1.0] (128 maps to 0.0)
+        this.buffer[i] = (this.byteBuffer[i] - 128) / 128
+      }
+    }
+
     return this.buffer
   }
 
@@ -137,6 +165,24 @@ export class AudioAnalyzer {
   }
 
   /**
+   * Resume the AudioContext if it was suspended or interrupted.
+   * Call this on visibility change (user returns to tab) to handle
+   * iOS Safari's "interrupted" state.
+   */
+  async resume(): Promise<void> {
+    if (!this.audioContext) return
+    const state = this.audioContext.state as string
+    if (state === "suspended" || state === "interrupted") {
+      try {
+        await this.audioContext.resume()
+        console.log("AudioAnalyzer: Resumed AudioContext from", state)
+      } catch {
+        console.warn("AudioAnalyzer: Failed to resume AudioContext")
+      }
+    }
+  }
+
+  /**
    * Detect pitch using YIN algorithm
    * Returns frequency in Hz, or 0 if no pitch detected
    */
@@ -167,6 +213,7 @@ export class AudioAnalyzer {
 
     this.analyser = null
     this.buffer = null
+    this.byteBuffer = null
     this.isInitialized = false
   }
 }
