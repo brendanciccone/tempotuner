@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { AudioAnalyzer } from "@/utils/audio-analyzer"
 import { NoteDetector } from "@/utils/note-detector"
-import { getRMS, MIN_FREQUENCY, MAX_FREQUENCY, SIGNAL_THRESHOLD } from "@/utils/audio-processing"
+import { getRMS, MIN_FREQUENCY, MAX_FREQUENCY } from "@/utils/audio-processing"
 import { DEFAULT_A4_FREQ } from "@/utils/note-utils"
 
 // Timing constants
@@ -111,9 +111,10 @@ export function useTuner(): [TunerState, TunerActions] {
     const buffer = audioAnalyzerRef.current.getAudioData()
     if (!buffer) return
 
-    // Check signal level
+    // Check signal level against adaptive threshold
     const rms = getRMS(buffer)
-    const hasSignal = rms > SIGNAL_THRESHOLD
+    const threshold = audioAnalyzerRef.current.getEffectiveThreshold()
+    const hasSignal = rms > threshold
 
     if (hasSignal) {
       // Update last signal time
@@ -152,8 +153,10 @@ export function useTuner(): [TunerState, TunerActions] {
         }
       }
     } else {
-      // No signal - start hold timer if not already running
-      // Use ref instead of state to avoid callback recreation
+      // No signal — feed RMS to noise floor tracker so it adapts to ambient noise
+      audioAnalyzerRef.current.updateNoiseFloor(rms)
+
+      // Start hold timer if not already running
       if (!signalHoldTimerRef.current && signalDetectedRef.current) {
         signalHoldTimerRef.current = window.setTimeout(() => {
           resetDisplay()

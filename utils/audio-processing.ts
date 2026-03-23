@@ -3,8 +3,6 @@ export const SIGNAL_THRESHOLD = 0.02 // Minimum RMS level to consider as signal 
 export const MIN_FREQUENCY = 27.5 // A0 - lowest piano note
 export const MAX_FREQUENCY = 4186.0 // C8 - highest piano note
 export const FREQUENCY_BUFFER_SIZE = 9 // Median filter buffer (odd number for true median, larger = more stable)
-export const CENTS_SMOOTHING = 0.35 // EMA alpha for cents display (lower = smoother, 0.2-0.5 range)
-export const FREQUENCY_SMOOTHING = 0.4 // EMA alpha for frequency display
 
 // Pre-allocated buffer to avoid GC pressure from creating a new Float32Array every frame
 let yinWorkBuffer: Float32Array | null = null
@@ -182,6 +180,13 @@ export const isFrequencyConsistent = (
   const tolerance = median * (tolerancePercent / 100)
 
   return Math.abs(newFreq - median) <= tolerance
+}
+
+/**
+ * Calculate cents between a detected frequency and a target note frequency
+ */
+export const centsFromFrequencies = (detected: number, target: number): number => {
+  return Math.round(1200 * Math.log2(detected / target))
 }
 
 /**

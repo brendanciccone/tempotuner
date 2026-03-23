@@ -1,13 +1,22 @@
-import { detectPitchYIN, getRMS } from "@/utils/audio-processing"
+import { detectPitchYIN, getRMS, SIGNAL_THRESHOLD } from "@/utils/audio-processing"
+
+// Noise floor tracking constants
+const NOISE_FLOOR_ALPHA = 0.05 // Slow EMA for ambient noise estimation
+const NOISE_FLOOR_MULTIPLIER = 3 // Signal must be N× above noise floor
+const NOISE_FLOOR_MIN = SIGNAL_THRESHOLD // Never go below the hard minimum
 
 /**
  * AudioAnalyzer class handles microphone input and pitch detection
- * 
- * Uses a larger FFT size (4096) for better low-frequency detection.
+ *
+ * Uses FFT size of 8192 for good low-frequency resolution.
  * At 44100Hz sample rate:
- * - 4096 samples = ~93ms of audio
- * - Minimum detectable frequency = 44100/4096 ≈ 10.8Hz
- * - This supports all standard instrument tuning ranges
+ * - 8192 samples ≈ 186ms of audio
+ * - Minimum detectable period = 4096 samples → ~10.8Hz
+ * - Supports all standard instrument tuning ranges
+ *
+ * Includes adaptive noise floor tracking: measures ambient RMS during
+ * silence and sets the effective signal threshold relative to it. This
+ * handles both quiet instruments and noisy environments automatically.
  */
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null
@@ -17,6 +26,10 @@ export class AudioAnalyzer {
   private buffer: Float32Array<ArrayBuffer> | null = null
   private isInitialized = false
   private onError: (message: string) => void
+
+  // Adaptive noise floor
+  private noiseFloor: number = SIGNAL_THRESHOLD
+  private noiseFloorInitialized: boolean = false
 
   // FFT size of 8192 provides better low-frequency accuracy:
   // - At 44100Hz: 8192 samples ≈ 186ms of audio
@@ -100,13 +113,27 @@ export class AudioAnalyzer {
   }
 
   /**
-   * Get the RMS level of the current buffer
-   * Useful for signal detection
+   * Get the effective signal threshold, accounting for ambient noise.
+   * The threshold is max(hardMin, noiseFloor * multiplier), so it adapts
+   * to the environment — a quiet room gets a lower threshold (more sensitive),
+   * a noisy room gets a higher threshold (fewer false triggers).
    */
-  getCurrentRMS(): number {
-    const buffer = this.getAudioData()
-    if (!buffer) return 0
-    return getRMS(buffer)
+  getEffectiveThreshold(): number {
+    return Math.max(NOISE_FLOOR_MIN, this.noiseFloor * NOISE_FLOOR_MULTIPLIER)
+  }
+
+  /**
+   * Update the ambient noise floor estimate.
+   * Call this with the current RMS when no signal is detected (silence frames).
+   * Uses a slow EMA so it adapts gradually to changing environments.
+   */
+  updateNoiseFloor(rms: number): void {
+    if (!this.noiseFloorInitialized) {
+      this.noiseFloor = rms
+      this.noiseFloorInitialized = true
+    } else {
+      this.noiseFloor += NOISE_FLOOR_ALPHA * (rms - this.noiseFloor)
+    }
   }
 
   /**
