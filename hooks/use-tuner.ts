@@ -214,6 +214,17 @@ export function useTuner(): [TunerState, TunerActions] {
     resetDisplay()
   }, [resetDisplay])
 
+  // Resume AudioContext when user returns to the tab (handles iOS Safari "interrupted" state)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && audioAnalyzerRef.current) {
+        audioAnalyzerRef.current.resume()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
+  }, [])
+
   // Initialize and cleanup
   useEffect(() => {
     // Small delay to ensure component is mounted
