@@ -1,19 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useTuner } from "@/hooks/use-tuner"
 import { NoteDisplay } from "@/components/tuner/note-display"
 import { TuningIndicator } from "@/components/tuner/tuning-indicator"
 import { TunerSettings } from "@/components/tuner/tuner-settings"
 
+// Parent components (ClientWrapper, ClientApp) already gate rendering until
+// client-side mount, so this component never runs during SSR and needs no
+// additional hydration guard.
 export default function Tuner() {
-  const [mounted, setMounted] = useState(false)
   const [state, actions] = useTuner()
-  
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   // Get the display note based on current settings
   const getDisplayNote = () => {
@@ -21,17 +18,6 @@ export default function Tuner() {
     return state.showOctave && state.currentOctave !== null
       ? `${state.currentNoteWithoutOctave}${state.currentOctave}`
       : state.currentNoteWithoutOctave
-  }
-
-  // Return a simple placeholder during server rendering to prevent hydration issues
-  if (!mounted) {
-    return (
-      <Card className="shadow-lg border border-border w-full overflow-hidden bg-card/50 backdrop-blur-sm">
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex flex-col items-center w-full min-h-[300px]"></div>
-        </CardContent>
-      </Card>
-    )
   }
 
   return (

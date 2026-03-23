@@ -12,7 +12,11 @@
     "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:security": "vitest run tests/security"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -68,11 +72,15 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
+    "jsdom": "^29.0.1",
     "postcss": "^8.4.35",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.1"
   }
 }
