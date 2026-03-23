@@ -167,30 +167,7 @@ export function useTuner(): [TunerState, TunerActions] {
   }, [resetDisplay])
 
   /**
-   * Start the tuner
-   */
-  const startTuner = useCallback(async () => {
-    // Create audio analyzer
-    if (!audioAnalyzerRef.current) {
-      audioAnalyzerRef.current = new AudioAnalyzer(setError)
-    }
-
-    // Create note detector
-    if (!noteDetectorRef.current) {
-      noteDetectorRef.current = new NoteDetector()
-    }
-
-    // Initialize audio
-    const success = await audioAnalyzerRef.current.initialize()
-    if (!success) return
-
-    // Start analysis loop using setInterval for consistent timing
-    // This is more predictable than requestAnimationFrame for audio processing
-    analysisIntervalRef.current = window.setInterval(analyzeAudio, ANALYSIS_INTERVAL)
-  }, [analyzeAudio])
-
-  /**
-   * Stop the tuner
+   * Stop the tuner and release all resources
    */
   const stopTuner = useCallback(() => {
     // Stop analysis loop
@@ -225,18 +202,41 @@ export function useTuner(): [TunerState, TunerActions] {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
   }, [])
 
-  // Initialize and cleanup
+  // Initialize tuner on mount, request mic permissions immediately
   useEffect(() => {
-    // Small delay to ensure component is mounted
-    const initTimer = setTimeout(() => {
-      startTuner()
-    }, 100)
+    let active = true
+
+    const init = async () => {
+      if (!audioAnalyzerRef.current) {
+        audioAnalyzerRef.current = new AudioAnalyzer(setError)
+      }
+      if (!noteDetectorRef.current) {
+        noteDetectorRef.current = new NoteDetector()
+      }
+
+      const success = await audioAnalyzerRef.current.initialize()
+
+      // Bail out if the effect was cleaned up during the async initialization
+      // (e.g. React strict mode double-mount or tab switch)
+      if (!active || !success) return
+
+      // Start analysis loop using setInterval for consistent timing
+      // This is more predictable than requestAnimationFrame for audio processing
+      analysisIntervalRef.current = window.setInterval(analyzeAudio, ANALYSIS_INTERVAL)
+    }
+
+    init().catch((err) => {
+      if (active) {
+        console.error("Tuner initialization failed:", err)
+        setError("Failed to initialize tuner. Please reload the page.")
+      }
+    })
 
     return () => {
-      clearTimeout(initTimer)
+      active = false
       stopTuner()
     }
-  }, [startTuner, stopTuner])
+  }, [analyzeAudio, stopTuner])
 
   // Actions
   const toggleNotation = useCallback(() => {

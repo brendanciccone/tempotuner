@@ -28,6 +28,10 @@ pnpm dev
 - `pnpm build` - Production build
 - `pnpm start` - Start production server
 - `pnpm lint` - Run linter
+- `pnpm test` - Run all tests
+- `pnpm test:unit` - Run unit tests
+- `pnpm test:integration` - Run integration tests
+- `pnpm test:security` - Run security tests
 
 ## Project Structure
 
@@ -36,7 +40,18 @@ app/          → Next.js pages and layouts
 components/   → React components (tuner, metronome, UI)
 hooks/        → Custom hooks
 utils/        → Audio processing utilities
+tests/        → Unit, integration, and security tests
 ```
+
+### Test Types
+
+- **Unit** (`tests/unit/`) — 27 tests covering audio processing, note detection, and tuner initialization
+
+## Recent Additions
+
+### March 2026
+- Fix tuner initialization to request microphone permissions immediately on load
+- Add test infrastructure with Vitest (27 unit tests)
 
 ## License
 
