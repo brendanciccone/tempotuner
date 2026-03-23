@@ -18,10 +18,12 @@ export class AudioAnalyzer {
   private isInitialized = false
   private onError: (message: string) => void
 
-  // FFT size of 4096 provides good balance between:
-  // - Frequency resolution for low notes (E2 = 82.4Hz needs good resolution)
-  // - Latency (4096 samples at 44100Hz ≈ 93ms)
-  private readonly FFT_SIZE = 4096
+  // FFT size of 8192 provides better low-frequency accuracy:
+  // - At 44100Hz: 8192 samples ≈ 186ms of audio
+  // - Minimum detectable period = 4096 samples → ~10.8Hz
+  // - Much better accuracy for bass guitar/low piano (E2 = 82.4Hz)
+  // - The extra latency is offset by EMA smoothing in NoteDetector
+  private readonly FFT_SIZE = 8192
 
   constructor(onError: (message: string) => void) {
     this.onError = onError

@@ -36,9 +36,10 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected, isNoteLoc
 
         {/* Indicator Needle - Show gray centered one when no signal */}
         <div
-          className={`absolute w-1 h-8 transform -translate-x-1/2 transition-all duration-200 ${getNeedleColor()}`}
+          className={`absolute w-1 h-8 transform -translate-x-1/2 ${getNeedleColor()}`}
           style={{
             left: showActiveIndicator && cents !== 0 ? `${50 + Math.min(Math.max(cents * 1.1, -50), 50)}%` : "50%",
+            transition: "left 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 300ms ease",
           }}
         ></div>
       </div>
