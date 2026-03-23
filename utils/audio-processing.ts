@@ -6,6 +6,26 @@ export const FREQUENCY_BUFFER_SIZE = 9 // Median filter buffer (odd number for t
 export const CENTS_SMOOTHING = 0.35 // EMA alpha for cents display (lower = smoother, 0.2-0.5 range)
 export const FREQUENCY_SMOOTHING = 0.4 // EMA alpha for frequency display
 
+// Cache for Hanning window coefficients (avoid recalculating every frame)
+const hanningWindowCache = new Map<number, Float32Array>()
+
+/**
+ * Get or create a Hanning window of a given size.
+ * Applying a window before YIN reduces spectral leakage from buffer edges,
+ * which otherwise causes false pitch spikes on transients and decaying notes.
+ */
+const getHanningWindow = (size: number): Float32Array => {
+  let window = hanningWindowCache.get(size)
+  if (!window) {
+    window = new Float32Array(size)
+    for (let i = 0; i < size; i++) {
+      window[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (size - 1)))
+    }
+    hanningWindowCache.set(size, window)
+  }
+  return window
+}
+
 // Calculate RMS (Root Mean Square) of the buffer to determine signal strength
 export const getRMS = (buffer: Float32Array<ArrayBuffer>): number => {
   let sum = 0
@@ -34,6 +54,13 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
   const bufferSize = buffer.length
   const halfSize = Math.floor(bufferSize / 2)
 
+  // Apply Hanning window to reduce edge artifacts from the rectangular buffer
+  const window = getHanningWindow(bufferSize)
+  const windowed = new Float32Array(bufferSize)
+  for (let i = 0; i < bufferSize; i++) {
+    windowed[i] = buffer[i] * window[i]
+  }
+
   // Step 1: Calculate the difference function
   // d(tau) = sum of squared differences between signal and its shifted version
   const yinBuffer = new Float32Array(halfSize)
@@ -45,7 +72,7 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
     // Using full buffer (not halfSize) improves accuracy for low frequencies
     const limit = bufferSize - tau
     for (let i = 0; i < limit; i++) {
-      const delta = buffer[i] - buffer[i + tau]
+      const delta = windowed[i] - windowed[i + tau]
       sum += delta * delta
     }
     yinBuffer[tau] = sum
