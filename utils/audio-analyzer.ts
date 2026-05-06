@@ -5,6 +5,53 @@ const NOISE_FLOOR_ALPHA = 0.05 // Slow EMA for ambient noise estimation
 const NOISE_FLOOR_MULTIPLIER = 3 // Signal must be N× above noise floor
 const NOISE_FLOOR_MIN = SIGNAL_THRESHOLD // Never go below the hard minimum
 
+const PREFERRED_SAMPLE_RATE = 44100
+
+/**
+ * Discriminated outcome of {@link AudioAnalyzer.initialize}.
+ *
+ * `success` means the mic stream is live and the AudioContext is running.
+ * `needs-gesture` means the AudioContext was created but is still suspended
+ * after `resume()` (typical on iOS Safari without a user gesture). The caller
+ * should surface a "tap to start" UI that calls {@link AudioAnalyzer.resume}.
+ * `error` carries an actionable message already shown to the user.
+ */
+export type InitResult = "success" | "needs-gesture" | "error"
+
+/**
+ * Categorised failure reason. Used by {@link AudioAnalyzer} to map raw
+ * errors / feature-detection results to user-facing messages.
+ */
+type FailureReason =
+  | "insecure-context"
+  | "unsupported-browser"
+  | "permission-denied"
+  | "no-microphone"
+  | "microphone-busy"
+  | "constraints-unsupported"
+  | "aborted"
+  | "audio-context-unavailable"
+  | "unknown"
+
+const FAILURE_MESSAGES: Record<FailureReason, string> = {
+  "insecure-context":
+    "Microphone access requires a secure connection (HTTPS). Please reload over HTTPS.",
+  "unsupported-browser":
+    "This browser doesn't support microphone input. Try the latest Chrome, Firefox, Safari, or Edge — and avoid in-app browsers (Instagram, TikTok, etc.).",
+  "permission-denied":
+    "Microphone access denied. Allow microphone access in your browser settings, then try again.",
+  "no-microphone":
+    "No microphone was found. Please connect a microphone and try again.",
+  "microphone-busy":
+    "Your microphone is in use by another app. Close other apps using the mic and try again.",
+  "constraints-unsupported":
+    "Your microphone doesn't support the requested settings. Try a different input device.",
+  "aborted": "Microphone request was cancelled. Try again to start the tuner.",
+  "audio-context-unavailable":
+    "Web Audio is not available in this browser. Please use a modern browser.",
+  "unknown": "Couldn't start the tuner. Please try again.",
+}
+
 /**
  * AudioAnalyzer class handles microphone input and pitch detection
  *
@@ -14,10 +61,13 @@ const NOISE_FLOOR_MIN = SIGNAL_THRESHOLD // Never go below the hard minimum
  * - Minimum detectable period = 4096 samples → ~10.8Hz
  * - Supports all standard instrument tuning ranges
  *
- * iOS Safari compatibility:
- * - Falls back to getByteTimeDomainData when getFloatTimeDomainData is missing
- * - Handles AudioContext "interrupted" state (tab switch, lock screen)
- * - Forces 44100Hz sample rate to avoid iOS resampling distortion
+ * Browser compatibility:
+ * - Falls back to getByteTimeDomainData when getFloatTimeDomainData is missing (older iOS Safari)
+ * - Falls back to default sample rate if 44100 is rejected by the hardware (Firefox / Linux / some USB interfaces)
+ * - Falls back to `webkitAudioContext` when the unprefixed constructor is missing
+ * - Handles AudioContext "interrupted" state (tab switch, lock screen on iOS)
+ * - Surfaces a `needs-gesture` outcome when iOS Safari leaves the context suspended after resume()
+ * - Maps DOMException names to specific user-facing messages
  */
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null
@@ -25,7 +75,7 @@ export class AudioAnalyzer {
   private source: MediaStreamAudioSourceNode | null = null
   private stream: MediaStream | null = null
   private buffer: Float32Array<ArrayBuffer> | null = null
-  private byteBuffer: Uint8Array<ArrayBuffer> | null = null // Fallback for iOS Safari
+  private byteBuffer: Uint8Array<ArrayBuffer> | null = null // Fallback for older iOS Safari
   private useFloatData: boolean = true // false when getFloatTimeDomainData is unavailable
   private isInitialized = false
   private onError: (message: string) => void
@@ -46,30 +96,46 @@ export class AudioAnalyzer {
   }
 
   /**
-   * Initialize the audio context and microphone access
-   * Returns true on success, false on failure
+   * Initialise the audio context and microphone access.
+   *
+   * Returns:
+   * - "success" when the mic stream is live and the context is running
+   * - "needs-gesture" when the context is still suspended (iOS Safari without user gesture)
+   * - "error" when initialisation failed; an actionable message has been delivered via onError
    */
-  async initialize(): Promise<boolean> {
+  async initialize(): Promise<InitResult> {
+    // 1. Secure-context check — getUserMedia silently fails over plain HTTP
+    if (typeof window !== "undefined" && window.isSecureContext === false) {
+      this.fail("insecure-context")
+      return "error"
+    }
+
+    // 2. Feature detection — covers in-app webviews, ancient browsers, locked-down profiles
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getUserMedia !== "function"
+    ) {
+      this.fail("unsupported-browser")
+      return "error"
+    }
+
     try {
-      // Create audio context with proper fallbacks
+      // 3. Create AudioContext with vendor-prefix fallback and sample-rate fallback
       if (!this.audioContext) {
-        console.log("AudioAnalyzer: Creating new AudioContext")
-        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-        // Force 44100Hz sample rate — iOS Safari can produce distortion
-        // when resampling between its native 48000Hz and the default rate
-        this.audioContext = new AudioContextClass({ sampleRate: 44100 })
+        const created = this.createAudioContext()
+        if (!created) {
+          this.fail("audio-context-unavailable")
+          return "error"
+        }
+        this.audioContext = created
       }
 
-      // Handle suspended (initial) and interrupted (tab switch / lock screen) states
-      if (this.audioContext.state === "suspended" || this.audioContext.state === "interrupted" as string) {
-        console.log(`AudioAnalyzer: Resuming ${this.audioContext.state} AudioContext`)
-        await this.audioContext.resume()
-      }
+      // 4. Try to resume — handles "suspended" (initial) and "interrupted" (tab switch / lock screen)
+      await this.tryResume()
 
-      // Request microphone access with settings optimized for pitch detection
-      // Disable all processing that could interfere with pitch detection
+      // 5. Request microphone with pitch-detection-friendly constraints
       if (!this.stream) {
-        console.log("AudioAnalyzer: Requesting microphone stream")
         this.stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: false,
@@ -77,43 +143,130 @@ export class AudioAnalyzer {
             autoGainControl: false,
           },
         })
-        console.log("AudioAnalyzer: Microphone stream obtained successfully")
       }
 
-      // Set up analyzer with optimized settings for pitch detection
+      // 6. Wire up the analyser
       this.analyser = this.audioContext.createAnalyser()
       this.analyser.fftSize = this.FFT_SIZE
-      // Low smoothing for responsive pitch tracking
-      this.analyser.smoothingTimeConstant = 0
+      this.analyser.smoothingTimeConstant = 0 // Low smoothing for responsive pitch tracking
 
-      // Connect audio source to analyzer
       this.source = this.audioContext.createMediaStreamSource(this.stream)
       this.source.connect(this.analyser)
 
-      // Create buffers for analysis
       this.buffer = new Float32Array(this.analyser.fftSize)
 
-      // Detect whether getFloatTimeDomainData is available (missing on iOS Safari)
+      // 7. Detect whether getFloatTimeDomainData is available (missing on older iOS Safari)
       if (typeof this.analyser.getFloatTimeDomainData !== "function") {
-        console.log("AudioAnalyzer: getFloatTimeDomainData not available, using byte fallback")
         this.useFloatData = false
         this.byteBuffer = new Uint8Array(this.analyser.fftSize) as Uint8Array<ArrayBuffer>
       }
 
       this.isInitialized = true
-      return true
+
+      // 8. iOS Safari: even after resume(), the context can stay suspended without
+      // an in-gesture call. Surface that to the UI so it can prompt for a tap.
+      if (this.audioContext.state === "suspended") {
+        return "needs-gesture"
+      }
+
+      return "success"
     } catch (err) {
-      console.error("Error accessing microphone:", err)
-      this.onError("Microphone access denied. Please allow microphone access and reload the page.")
-      return false
+      this.fail(this.classifyError(err), err)
+      return "error"
     }
   }
 
   /**
+   * Map a DOMException (or any unknown error) to a {@link FailureReason}.
+   * Names follow the WebRTC spec: https://w3c.github.io/mediacapture-main/#methods
+   */
+  private classifyError(err: unknown): FailureReason {
+    if (typeof err === "object" && err !== null && "name" in err) {
+      const name = (err as { name: unknown }).name
+      if (typeof name === "string") {
+        switch (name) {
+          case "NotAllowedError":
+          case "PermissionDeniedError": // legacy alias
+            return "permission-denied"
+          case "NotFoundError":
+          case "DevicesNotFoundError": // legacy alias
+            return "no-microphone"
+          case "NotReadableError":
+          case "TrackStartError": // legacy alias
+            return "microphone-busy"
+          case "OverconstrainedError":
+          case "ConstraintNotSatisfiedError": // legacy alias
+            return "constraints-unsupported"
+          case "SecurityError":
+            return "insecure-context"
+          case "AbortError":
+            return "aborted"
+          case "TypeError":
+            // getUserMedia throws TypeError when called with no audio/video constraints
+            // or in non-secure contexts on some browsers
+            return "unsupported-browser"
+        }
+      }
+    }
+    return "unknown"
+  }
+
+  /**
+   * Create an AudioContext, preferring 44100Hz to avoid iOS resampling artefacts
+   * but falling back to the device default if that rate is unsupported.
+   */
+  private createAudioContext(): AudioContext | null {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+
+    if (typeof AudioContextClass !== "function") {
+      return null
+    }
+
+    // Try preferred sample rate first
+    try {
+      return new AudioContextClass({ sampleRate: PREFERRED_SAMPLE_RATE })
+    } catch {
+      // Hardware doesn't support 44100 (some Firefox/Linux/USB combos) — fall back to default
+    }
+
+    try {
+      return new AudioContextClass()
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Attempt to resume the AudioContext. Swallows errors — the caller checks
+   * `state` afterwards to decide whether a user gesture is still required.
+   */
+  private async tryResume(): Promise<void> {
+    if (!this.audioContext) return
+    // iOS Safari adds an "interrupted" state that isn't in the standard typedef
+    const state = this.audioContext.state as string
+    if (state === "suspended" || state === "interrupted") {
+      try {
+        await this.audioContext.resume()
+      } catch {
+        // Resume failure is expected on iOS without a user gesture; UI handles it.
+      }
+    }
+  }
+
+  private fail(reason: FailureReason, err?: unknown): void {
+    if (err !== undefined) {
+      console.error("AudioAnalyzer:", reason, err)
+    }
+    this.onError(FAILURE_MESSAGES[reason])
+  }
+
+  /**
    * Get the current audio buffer (time-domain data as Float32Array)
-   * Returns null if not initialized
+   * Returns null if not initialized.
    *
-   * On iOS Safari where getFloatTimeDomainData doesn't exist, falls back to
+   * On older iOS Safari where getFloatTimeDomainData doesn't exist, falls back to
    * getByteTimeDomainData and converts unsigned bytes [0, 255] to floats [-1, 1].
    */
   getAudioData(): Float32Array<ArrayBuffer> | null {
@@ -122,7 +275,6 @@ export class AudioAnalyzer {
     if (this.useFloatData) {
       this.analyser.getFloatTimeDomainData(this.buffer)
     } else if (this.byteBuffer) {
-      // Fallback: getByteTimeDomainData returns unsigned bytes where 128 = silence
       this.analyser.getByteTimeDomainData(this.byteBuffer)
       for (let i = 0; i < this.byteBuffer.length; i++) {
         // Convert [0, 255] → [-1.0, 1.0] (128 maps to 0.0)
@@ -134,10 +286,10 @@ export class AudioAnalyzer {
   }
 
   /**
-   * Get the sample rate of the audio context
+   * Get the sample rate of the audio context (whatever the hardware actually gave us).
    */
   getSampleRate(): number {
-    return this.audioContext?.sampleRate || 44100
+    return this.audioContext?.sampleRate || PREFERRED_SAMPLE_RATE
   }
 
   /**
@@ -166,20 +318,25 @@ export class AudioAnalyzer {
 
   /**
    * Resume the AudioContext if it was suspended or interrupted.
-   * Call this on visibility change (user returns to tab) to handle
-   * iOS Safari's "interrupted" state.
+   * Call this from a user-gesture handler (button click) on iOS Safari, or on
+   * visibility change when the user returns to the tab.
+   *
+   * Returns true if the context is running after the call, false otherwise.
    */
-  async resume(): Promise<void> {
-    if (!this.audioContext) return
+  async resume(): Promise<boolean> {
+    if (!this.audioContext) return false
+    await this.tryResume()
+    return this.audioContext.state === "running"
+  }
+
+  /**
+   * Whether the audio context is still suspended and needs a user gesture
+   * to resume. Used by the UI to decide whether to show a "tap to start" prompt.
+   */
+  isSuspended(): boolean {
+    if (!this.audioContext) return false
     const state = this.audioContext.state as string
-    if (state === "suspended" || state === "interrupted") {
-      try {
-        await this.audioContext.resume()
-        console.log("AudioAnalyzer: Resumed AudioContext from", state)
-      } catch {
-        console.warn("AudioAnalyzer: Failed to resume AudioContext")
-      }
-    }
+    return state === "suspended" || state === "interrupted"
   }
 
   /**
@@ -207,7 +364,9 @@ export class AudioAnalyzer {
     }
 
     if (this.audioContext) {
-      this.audioContext.close()
+      this.audioContext.close().catch(() => {
+        // Closing an already-closed context throws on some browsers; ignore.
+      })
       this.audioContext = null
     }
 

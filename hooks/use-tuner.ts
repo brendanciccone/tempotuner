@@ -24,6 +24,10 @@ export interface TunerState {
   showOctave: boolean
   referenceFreq: number
   isNoteLocked: boolean
+  /** True when the AudioContext is suspended and needs a user-gesture resume (typical on iOS Safari). */
+  needsUserGesture: boolean
+  /** True while initial mic permission request is in flight. */
+  isInitializing: boolean
 }
 
 export interface TunerActions {
@@ -31,15 +35,19 @@ export interface TunerActions {
   toggleOctaveDisplay: () => void
   adjustReferenceFreq: (increment: number) => void
   resetReferenceFreq: () => void
+  /** Resume a suspended AudioContext (call from a click handler on iOS Safari). */
+  startWithGesture: () => Promise<void>
+  /** Retry initialisation after a permission error or other failure. */
+  retry: () => Promise<void>
 }
 
 /**
  * useTuner hook - Main tuner logic
- * 
- * Simplified architecture:
+ *
+ * Architecture:
  * 1. AudioAnalyzer handles microphone input and pitch detection (YIN algorithm)
- * 2. NoteDetector handles pitch-to-note conversion with simple median filtering
- * 3. This hook manages state and the analysis loop
+ * 2. NoteDetector handles pitch-to-note conversion with median filtering + EMA
+ * 3. This hook manages state, the analysis loop, and gesture/retry flows
  */
 export function useTuner(): [TunerState, TunerActions] {
   // Display state
@@ -53,6 +61,8 @@ export function useTuner(): [TunerState, TunerActions] {
   const [signalDetected, setSignalDetected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isNoteLocked, setIsNoteLocked] = useState(false)
+  const [needsUserGesture, setNeedsUserGesture] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(true)
 
   // Settings state
   const [useFlats, setUseFlats] = useState(false)
@@ -66,6 +76,7 @@ export function useTuner(): [TunerState, TunerActions] {
   const signalHoldTimerRef = useRef<number | null>(null)
   const lastSignalTimeRef = useRef<number>(0)
   const signalDetectedRef = useRef(false)
+  const isUnmountedRef = useRef(false)
 
   // Keep refs to current settings for use in analysis loop
   const useFlatsRef = useRef(useFlats)
@@ -95,7 +106,6 @@ export function useTuner(): [TunerState, TunerActions] {
     setDisplayFrequency(null)
     setIsNoteLocked(false)
 
-    // Reset the note detector
     if (noteDetectorRef.current) {
       noteDetectorRef.current.reset()
     }
@@ -107,31 +117,24 @@ export function useTuner(): [TunerState, TunerActions] {
   const analyzeAudio = useCallback(() => {
     if (!audioAnalyzerRef.current || !noteDetectorRef.current) return
 
-    // Get audio buffer
     const buffer = audioAnalyzerRef.current.getAudioData()
     if (!buffer) return
 
-    // Check signal level against adaptive threshold
     const rms = getRMS(buffer)
     const threshold = audioAnalyzerRef.current.getEffectiveThreshold()
     const hasSignal = rms > threshold
 
     if (hasSignal) {
-      // Update last signal time
       lastSignalTimeRef.current = Date.now()
 
-      // Clear any pending hold timer
       if (signalHoldTimerRef.current) {
         window.clearTimeout(signalHoldTimerRef.current)
         signalHoldTimerRef.current = null
       }
 
-      // Detect pitch
       const frequency = audioAnalyzerRef.current.detectPitch(buffer)
 
-      // Process if we have a valid frequency
       if (frequency > MIN_FREQUENCY && frequency < MAX_FREQUENCY) {
-        // Get note info with smoothing
         const noteInfo = noteDetectorRef.current.detectNote(
           frequency,
           referenceFreqRef.current,
@@ -139,7 +142,6 @@ export function useTuner(): [TunerState, TunerActions] {
         )
 
         if (noteInfo) {
-          // Update state and ref
           signalDetectedRef.current = true
           setSignalDetected(true)
           setCurrentFrequency(frequency)
@@ -156,7 +158,6 @@ export function useTuner(): [TunerState, TunerActions] {
       // No signal — feed RMS to noise floor tracker so it adapts to ambient noise
       audioAnalyzerRef.current.updateNoiseFloor(rms)
 
-      // Start hold timer if not already running
       if (!signalHoldTimerRef.current && signalDetectedRef.current) {
         signalHoldTimerRef.current = window.setTimeout(() => {
           resetDisplay()
@@ -167,76 +168,139 @@ export function useTuner(): [TunerState, TunerActions] {
   }, [resetDisplay])
 
   /**
-   * Stop the tuner and release all resources
+   * Start the analysis loop. Idempotent.
    */
-  const stopTuner = useCallback(() => {
-    // Stop analysis loop
-    if (analysisIntervalRef.current) {
+  const startAnalysisLoop = useCallback(() => {
+    if (analysisIntervalRef.current !== null) return
+    // setInterval gives more predictable timing for audio than rAF (which throttles
+    // when the tab is hidden — but visibility-change handles resume separately)
+    analysisIntervalRef.current = window.setInterval(analyzeAudio, ANALYSIS_INTERVAL)
+  }, [analyzeAudio])
+
+  /**
+   * Stop the analysis loop (without tearing down the AudioContext).
+   */
+  const stopAnalysisLoop = useCallback(() => {
+    if (analysisIntervalRef.current !== null) {
       window.clearInterval(analysisIntervalRef.current)
       analysisIntervalRef.current = null
     }
-
-    // Clear hold timer
-    if (signalHoldTimerRef.current) {
+    if (signalHoldTimerRef.current !== null) {
       window.clearTimeout(signalHoldTimerRef.current)
       signalHoldTimerRef.current = null
     }
+  }, [])
 
-    // Clean up audio
+  /**
+   * Stop the tuner and release all resources
+   */
+  const stopTuner = useCallback(() => {
+    stopAnalysisLoop()
+
     if (audioAnalyzerRef.current) {
       audioAnalyzerRef.current.cleanup()
       audioAnalyzerRef.current = null
     }
 
     resetDisplay()
-  }, [resetDisplay])
+  }, [resetDisplay, stopAnalysisLoop])
+
+  /**
+   * Initialise the analyzer + detector and start the analysis loop based on the result.
+   * Used by the mount effect and the retry action.
+   */
+  const initialise = useCallback(async () => {
+    if (!audioAnalyzerRef.current) {
+      audioAnalyzerRef.current = new AudioAnalyzer((message) => {
+        if (!isUnmountedRef.current) setError(message)
+      })
+    }
+    if (!noteDetectorRef.current) {
+      noteDetectorRef.current = new NoteDetector()
+    }
+
+    setError(null)
+    setNeedsUserGesture(false)
+    setIsInitializing(true)
+
+    const result = await audioAnalyzerRef.current.initialize()
+
+    if (isUnmountedRef.current) return
+
+    setIsInitializing(false)
+
+    if (result === "success") {
+      startAnalysisLoop()
+    } else if (result === "needs-gesture") {
+      setNeedsUserGesture(true)
+    }
+    // "error" — message already delivered through the onError callback
+  }, [startAnalysisLoop])
+
+  /**
+   * Resume a suspended AudioContext from inside a user-gesture handler.
+   * Required by iOS Safari when the page loads without prior interaction.
+   */
+  const startWithGesture = useCallback(async () => {
+    if (!audioAnalyzerRef.current) {
+      await initialise()
+      return
+    }
+
+    const running = await audioAnalyzerRef.current.resume()
+    if (running) {
+      setNeedsUserGesture(false)
+      startAnalysisLoop()
+    }
+  }, [initialise, startAnalysisLoop])
+
+  /**
+   * Retry initialisation after a failure. Tears down any partial state first
+   * so we get a clean attempt — important after a permission denial where
+   * the user may have changed their browser setting.
+   */
+  const retry = useCallback(async () => {
+    stopTuner()
+    await initialise()
+  }, [initialise, stopTuner])
 
   // Resume AudioContext when user returns to the tab (handles iOS Safari "interrupted" state)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && audioAnalyzerRef.current) {
-        audioAnalyzerRef.current.resume()
-      }
+      if (document.visibilityState !== "visible" || !audioAnalyzerRef.current) return
+
+      audioAnalyzerRef.current.resume().then((running) => {
+        if (isUnmountedRef.current) return
+        if (running) {
+          setNeedsUserGesture(false)
+          startAnalysisLoop()
+        } else if (audioAnalyzerRef.current?.isSuspended()) {
+          // Couldn't resume without a gesture — surface the prompt again
+          setNeedsUserGesture(true)
+        }
+      })
     }
     document.addEventListener("visibilitychange", handleVisibilityChange)
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
-  }, [])
+  }, [startAnalysisLoop])
 
   // Initialize tuner on mount, request mic permissions immediately
   useEffect(() => {
-    let active = true
+    isUnmountedRef.current = false
 
-    const init = async () => {
-      if (!audioAnalyzerRef.current) {
-        audioAnalyzerRef.current = new AudioAnalyzer(setError)
-      }
-      if (!noteDetectorRef.current) {
-        noteDetectorRef.current = new NoteDetector()
-      }
-
-      const success = await audioAnalyzerRef.current.initialize()
-
-      // Bail out if the effect was cleaned up during the async initialization
-      // (e.g. React strict mode double-mount or tab switch)
-      if (!active || !success) return
-
-      // Start analysis loop using setInterval for consistent timing
-      // This is more predictable than requestAnimationFrame for audio processing
-      analysisIntervalRef.current = window.setInterval(analyzeAudio, ANALYSIS_INTERVAL)
-    }
-
-    init().catch((err) => {
-      if (active) {
+    initialise().catch((err) => {
+      if (!isUnmountedRef.current) {
         console.error("Tuner initialization failed:", err)
-        setError("Failed to initialize tuner. Please reload the page.")
+        setError("Couldn't start the tuner. Please try again.")
+        setIsInitializing(false)
       }
     })
 
     return () => {
-      active = false
+      isUnmountedRef.current = true
       stopTuner()
     }
-  }, [analyzeAudio, stopTuner])
+  }, [initialise, stopTuner])
 
   // Actions
   const toggleNotation = useCallback(() => {
@@ -272,6 +336,8 @@ export function useTuner(): [TunerState, TunerActions] {
     showOctave,
     referenceFreq,
     isNoteLocked,
+    needsUserGesture,
+    isInitializing,
   }
 
   const actions: TunerActions = {
@@ -279,6 +345,8 @@ export function useTuner(): [TunerState, TunerActions] {
     toggleOctaveDisplay,
     adjustReferenceFreq,
     resetReferenceFreq,
+    startWithGesture,
+    retry,
   }
 
   return [state, actions]

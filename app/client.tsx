@@ -94,22 +94,36 @@ export default function ClientApp() {
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex w-full mb-4 border border-border rounded-lg overflow-hidden">
+        <div
+          role="tablist"
+          aria-label="Tool selection"
+          className="flex w-full mb-4 border border-border rounded-lg overflow-hidden"
+        >
           <button
+            role="tab"
+            id="tab-tuner"
+            aria-selected={activeTab === "tuner"}
+            aria-controls="panel-tuner"
+            tabIndex={activeTab === "tuner" ? 0 : -1}
             onClick={() => setActiveTab("tuner")}
-            className={`flex-1 py-2 text-center font-medium text-sm transition-colors ${
-              activeTab === "tuner" 
-                ? "bg-primary text-primary-foreground font-semibold" 
+            className={`flex-1 py-2 text-center font-medium text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              activeTab === "tuner"
+                ? "bg-primary text-primary-foreground font-semibold"
                 : "bg-card text-foreground hover:bg-muted/50"
             }`}
           >
             Tuner
           </button>
           <button
+            role="tab"
+            id="tab-tempo"
+            aria-selected={activeTab === "tempo"}
+            aria-controls="panel-tempo"
+            tabIndex={activeTab === "tempo" ? 0 : -1}
             onClick={() => setActiveTab("tempo")}
-            className={`flex-1 py-2 text-center font-medium text-sm transition-colors ${
-              activeTab === "tempo" 
-                ? "bg-primary text-primary-foreground font-semibold" 
+            className={`flex-1 py-2 text-center font-medium text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              activeTab === "tempo"
+                ? "bg-primary text-primary-foreground font-semibold"
                 : "bg-card text-foreground hover:bg-muted/50"
             }`}
           >
@@ -118,8 +132,22 @@ export default function ClientApp() {
         </div>
 
         {/* Content */}
-        {activeTab === "tempo" && <TapTempo />}
-        {activeTab === "tuner" && <Tuner key="tuner-component" />}
+        <div
+          role="tabpanel"
+          id="panel-tempo"
+          aria-labelledby="tab-tempo"
+          hidden={activeTab !== "tempo"}
+        >
+          {activeTab === "tempo" && <TapTempo />}
+        </div>
+        <div
+          role="tabpanel"
+          id="panel-tuner"
+          aria-labelledby="tab-tuner"
+          hidden={activeTab !== "tuner"}
+        >
+          {activeTab === "tuner" && <Tuner key="tuner-component" />}
+        </div>
       </div>
     </main>
   )
