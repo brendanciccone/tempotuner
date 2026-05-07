@@ -33,21 +33,21 @@ export default function ClientApp() {
     tempo: null,
   })
 
-  // WAI-ARIA tabs keyboard pattern (manual activation): arrow keys / Home / End
-  // move focus only. The user activates with Enter or Space (handled natively by
-  // <button>). Manual activation is correct here because switching tabs unmounts
-  // the Tuner, which would otherwise re-prompt for mic permission on every arrow press.
+  // WAI-ARIA tabs keyboard pattern (manual activation, horizontal orientation):
+  // ArrowLeft/ArrowRight + Home/End move focus only. The user activates with Enter
+  // or Space (handled natively by <button>). Manual activation avoids re-prompting
+  // for mic permission on every arrow press (switching tabs unmounts the Tuner).
+  // ArrowUp/ArrowDown are intentionally NOT handled — for a horizontal tablist the
+  // APG specifies leaving them alone so they retain native page-scroll behavior.
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, current: TabId) => {
     const currentIndex = TAB_ORDER.indexOf(current)
     let nextIndex: number | null = null
 
     switch (event.key) {
       case "ArrowRight":
-      case "ArrowDown":
         nextIndex = (currentIndex + 1) % TAB_ORDER.length
         break
       case "ArrowLeft":
-      case "ArrowUp":
         nextIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length
         break
       case "Home":

@@ -50,6 +50,7 @@ tests/        → Unit, integration, and security tests
 ## Recent Additions
 
 ### May 2026
+
 - Cross-browser tuner hardening: secure-context check, `navigator.mediaDevices` feature detection (in-app webviews / older browsers), and 44100Hz sample-rate fallback for hardware that rejects it
 - Specific error messages mapped from DOMException names: permission denied, no microphone, microphone in use, unsupported constraints, insecure context
 - iOS Safari "tap to start" prompt when the AudioContext stays suspended after `resume()` outside a user gesture
@@ -57,6 +58,7 @@ tests/        → Unit, integration, and security tests
 - ARIA roles (`tablist` / `tab` / `tabpanel`) and keyboard focus on the Tuner/Tempo switcher
 
 ### March 2026
+
 - Fix tuner initialization to request microphone permissions immediately on load
 - Add test infrastructure with Vitest
 

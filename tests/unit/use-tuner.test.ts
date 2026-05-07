@@ -98,7 +98,7 @@ describe("AudioAnalyzer", () => {
     })
     expect(onError).not.toHaveBeenCalled()
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("returns 'error' and reports a permission-denied message on NotAllowedError", async () => {
@@ -232,7 +232,7 @@ describe("AudioAnalyzer", () => {
     expect(analyzer.getSampleRate()).toBe(48000)
     expect(onError).not.toHaveBeenCalled()
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("returns 'needs-gesture' when the AudioContext stays suspended after resume()", async () => {
@@ -248,7 +248,7 @@ describe("AudioAnalyzer", () => {
     expect(mockAudioContextResume).toHaveBeenCalled()
     expect(analyzer.isSuspended()).toBe(true)
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("resumes a suspended AudioContext during initialize()", async () => {
@@ -261,7 +261,7 @@ describe("AudioAnalyzer", () => {
 
     expect(mockAudioContextResume).toHaveBeenCalled()
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("cleanup() releases all resources", async () => {
@@ -269,7 +269,7 @@ describe("AudioAnalyzer", () => {
     const analyzer = new AudioAnalyzer(onError)
 
     await analyzer.initialize()
-    analyzer.cleanup()
+    await analyzer.cleanup()
 
     expect(mockTrackStop).toHaveBeenCalled()
     expect(mockAudioContextClose).toHaveBeenCalled()
@@ -286,7 +286,7 @@ describe("AudioAnalyzer", () => {
     await analyzer.initialize()
     expect(mockGetUserMedia).toHaveBeenCalledTimes(1)
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("resume() does nothing if AudioContext is already running", async () => {
@@ -298,7 +298,7 @@ describe("AudioAnalyzer", () => {
     expect(running).toBe(true)
     expect(mockAudioContextResume).toHaveBeenCalledTimes(0)
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("resume() returns true when context transitions from suspended to running", async () => {
@@ -334,7 +334,7 @@ describe("AudioAnalyzer", () => {
     expect(initResult).toBe("success")
     expect(analyzer.isSuspended()).toBe(false)
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("falls back to webkitAudioContext when window.AudioContext is missing", async () => {
@@ -349,7 +349,7 @@ describe("AudioAnalyzer", () => {
     expect(result).toBe("success")
     expect(onError).not.toHaveBeenCalled()
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("can be re-initialized after cleanup() (the underlying retry mechanism)", async () => {
@@ -363,7 +363,7 @@ describe("AudioAnalyzer", () => {
     expect(onError).toHaveBeenCalledTimes(1)
 
     // User changes browser permission, app calls retry → cleanup() + initialize()
-    analyzer.cleanup()
+    await analyzer.cleanup()
     onError.mockClear()
 
     // Second attempt: succeeds
@@ -374,7 +374,7 @@ describe("AudioAnalyzer", () => {
     expect(mockGetUserMedia).toHaveBeenCalledTimes(2)
     expect(onError).not.toHaveBeenCalled()
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("resume() returns false when called before initialize()", async () => {
@@ -395,7 +395,7 @@ describe("AudioAnalyzer", () => {
 
     expect(analyzer.isSuspended()).toBe(true)
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
 })

@@ -88,7 +88,11 @@ export default function Tuner() {
           />
 
           {state.error && (
-            <div className="mt-6 w-full flex flex-col items-center gap-2">
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="mt-6 w-full flex flex-col items-center gap-2"
+            >
               <div className="text-sm text-error-high-contrast text-center">
                 {state.error}
               </div>

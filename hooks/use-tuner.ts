@@ -193,13 +193,18 @@ export function useTuner(): [TunerState, TunerActions] {
 
   /**
    * Release audio resources without touching React state. Safe to call after unmount.
+   *
+   * Returns a Promise that resolves once the AudioContext has fully closed.
+   * The retry flow MUST await this before creating a new context (otherwise we
+   * race the previous context's close()). Unmount can fire-and-forget — see usage.
    */
-  const cleanupResources = useCallback(() => {
+  const cleanupResources = useCallback(async (): Promise<void> => {
     stopAnalysisLoop()
 
-    if (audioAnalyzerRef.current) {
-      audioAnalyzerRef.current.cleanup()
-      audioAnalyzerRef.current = null
+    const analyzer = audioAnalyzerRef.current
+    audioAnalyzerRef.current = null
+    if (analyzer) {
+      await analyzer.cleanup()
     }
   }, [stopAnalysisLoop])
 
@@ -208,8 +213,8 @@ export function useTuner(): [TunerState, TunerActions] {
    * user-initiated stops (e.g. retry). On unmount call cleanupResources()
    * directly so we don't schedule setState on an unmounted component.
    */
-  const stopTuner = useCallback(() => {
-    cleanupResources()
+  const stopTuner = useCallback(async (): Promise<void> => {
+    await cleanupResources()
     resetDisplay()
   }, [cleanupResources, resetDisplay])
 
@@ -268,7 +273,10 @@ export function useTuner(): [TunerState, TunerActions] {
    * the user may have changed their browser setting.
    */
   const retry = useCallback(async () => {
-    stopTuner()
+    // Must await stopTuner so the previous AudioContext fully closes before we
+    // create a new one (Web Audio spec: creation-blocking resources are only
+    // released after close() resolves).
+    await stopTuner()
     await initialise()
   }, [initialise, stopTuner])
 
@@ -308,7 +316,8 @@ export function useTuner(): [TunerState, TunerActions] {
       isUnmountedRef.current = true
       // Resource-only cleanup on unmount — resetDisplay() would schedule setState
       // on an unmounted component. UI reset isn't needed since the component is gone.
-      cleanupResources()
+      // Fire-and-forget: we don't want to block React's unmount on close() resolving.
+      void cleanupResources()
     }
   }, [initialise, cleanupResources])
 

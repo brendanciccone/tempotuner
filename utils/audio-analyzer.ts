@@ -351,10 +351,15 @@ export class AudioAnalyzer {
   }
 
   /**
-   * Clean up all resources
-   * Call this when the tuner is stopped
+   * Release all resources. Returns a Promise that resolves when the AudioContext
+   * has fully closed — important to await before re-creating a context (retry flow),
+   * since the Web Audio spec only releases creation-blocking resources after close()
+   * resolves. Browsers limit concurrent AudioContexts; on Safari/iOS this race is
+   * a known cause of flaky mic re-init.
+   *
+   * The unmount path is allowed to fire-and-forget; only explicit retry must await.
    */
-  cleanup(): void {
+  async cleanup(): Promise<void> {
     if (this.source) {
       this.source.disconnect()
       this.source = null
@@ -365,16 +370,20 @@ export class AudioAnalyzer {
       this.stream = null
     }
 
-    if (this.audioContext) {
-      this.audioContext.close().catch(() => {
-        // Closing an already-closed context throws on some browsers; ignore.
-      })
-      this.audioContext = null
-    }
-
+    // Capture the close() promise before nulling the ref so callers can await it.
+    const context = this.audioContext
+    this.audioContext = null
     this.analyser = null
     this.buffer = null
     this.byteBuffer = null
     this.isInitialized = false
+
+    if (context) {
+      try {
+        await context.close()
+      } catch {
+        // Closing an already-closed context throws on some browsers; ignore.
+      }
+    }
   }
 }
