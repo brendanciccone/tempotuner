@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import Image from "next/image"
 import TapTempo from "@/components/tap-tempo"
 import Tuner from "@/components/tuner"
 import { Button } from "@/components/ui/button"
 import { Settings } from "lucide-react"
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -21,10 +21,47 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+type TabId = "tuner" | "tempo"
+const TAB_ORDER: readonly TabId[] = ["tuner", "tempo"] as const
+
 export default function ClientApp() {
   const [mounted, setMounted] = useState(false)
-  const [activeTab, setActiveTab] = useState<"tempo" | "tuner">("tuner")
+  const [activeTab, setActiveTab] = useState<TabId>("tuner")
   const [selectedStyle, setSelectedStyle] = useState("default")
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
+    tuner: null,
+    tempo: null,
+  })
+
+  // WAI-ARIA tabs keyboard pattern: Arrow keys navigate, Home/End jump to ends.
+  // Activates on focus (automatic activation) since both panels are cheap to mount.
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, current: TabId) => {
+    const currentIndex = TAB_ORDER.indexOf(current)
+    let nextIndex: number | null = null
+
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        nextIndex = (currentIndex + 1) % TAB_ORDER.length
+        break
+      case "ArrowLeft":
+      case "ArrowUp":
+        nextIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length
+        break
+      case "Home":
+        nextIndex = 0
+        break
+      case "End":
+        nextIndex = TAB_ORDER.length - 1
+        break
+    }
+
+    if (nextIndex === null) return
+    event.preventDefault()
+    const nextTab = TAB_ORDER[nextIndex]
+    setActiveTab(nextTab)
+    tabRefs.current[nextTab]?.focus()
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -100,12 +137,16 @@ export default function ClientApp() {
           className="flex w-full mb-4 border border-border rounded-lg overflow-hidden"
         >
           <button
+            ref={(el) => {
+              tabRefs.current.tuner = el
+            }}
             role="tab"
             id="tab-tuner"
             aria-selected={activeTab === "tuner"}
             aria-controls="panel-tuner"
             tabIndex={activeTab === "tuner" ? 0 : -1}
             onClick={() => setActiveTab("tuner")}
+            onKeyDown={(e) => handleTabKeyDown(e, "tuner")}
             className={`flex-1 py-2 text-center font-medium text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               activeTab === "tuner"
                 ? "bg-primary text-primary-foreground font-semibold"
@@ -115,12 +156,16 @@ export default function ClientApp() {
             Tuner
           </button>
           <button
+            ref={(el) => {
+              tabRefs.current.tempo = el
+            }}
             role="tab"
             id="tab-tempo"
             aria-selected={activeTab === "tempo"}
             aria-controls="panel-tempo"
             tabIndex={activeTab === "tempo" ? 0 : -1}
             onClick={() => setActiveTab("tempo")}
+            onKeyDown={(e) => handleTabKeyDown(e, "tempo")}
             className={`flex-1 py-2 text-center font-medium text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               activeTab === "tempo"
                 ? "bg-primary text-primary-foreground font-semibold"

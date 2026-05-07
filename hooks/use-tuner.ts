@@ -192,18 +192,26 @@ export function useTuner(): [TunerState, TunerActions] {
   }, [])
 
   /**
-   * Stop the tuner and release all resources
+   * Release audio resources without touching React state. Safe to call after unmount.
    */
-  const stopTuner = useCallback(() => {
+  const cleanupResources = useCallback(() => {
     stopAnalysisLoop()
 
     if (audioAnalyzerRef.current) {
       audioAnalyzerRef.current.cleanup()
       audioAnalyzerRef.current = null
     }
+  }, [stopAnalysisLoop])
 
+  /**
+   * Stop the tuner: release resources AND reset the visible UI. Use this for
+   * user-initiated stops (e.g. retry). On unmount call cleanupResources()
+   * directly so we don't schedule setState on an unmounted component.
+   */
+  const stopTuner = useCallback(() => {
+    cleanupResources()
     resetDisplay()
-  }, [resetDisplay, stopAnalysisLoop])
+  }, [cleanupResources, resetDisplay])
 
   /**
    * Initialise the analyzer + detector and start the analysis loop based on the result.
@@ -298,9 +306,11 @@ export function useTuner(): [TunerState, TunerActions] {
 
     return () => {
       isUnmountedRef.current = true
-      stopTuner()
+      // Resource-only cleanup on unmount — resetDisplay() would schedule setState
+      // on an unmounted component. UI reset isn't needed since the component is gone.
+      cleanupResources()
     }
-  }, [initialise, stopTuner])
+  }, [initialise, cleanupResources])
 
   // Actions
   const toggleNotation = useCallback(() => {
