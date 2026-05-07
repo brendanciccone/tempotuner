@@ -201,6 +201,10 @@ export function useTuner(): [TunerState, TunerActions] {
   const cleanupResources = useCallback(async (): Promise<void> => {
     stopAnalysisLoop()
 
+    // Reset the note detector so a stale frequency buffer / locked note from a
+    // previous session doesn't bias the first reading after a retry.
+    noteDetectorRef.current?.reset()
+
     const analyzer = audioAnalyzerRef.current
     audioAnalyzerRef.current = null
     if (analyzer) {
@@ -261,6 +265,9 @@ export function useTuner(): [TunerState, TunerActions] {
     }
 
     const running = await audioAnalyzerRef.current.resume()
+    // Guard against unmount during the async resume() — without this, the
+    // setState calls below would land on an unmounted component.
+    if (isUnmountedRef.current) return
     if (running) {
       setNeedsUserGesture(false)
       startAnalysisLoop()
