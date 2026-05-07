@@ -351,6 +351,53 @@ describe("AudioAnalyzer", () => {
 
     analyzer.cleanup()
   })
+
+  it("can be re-initialized after cleanup() (the underlying retry mechanism)", async () => {
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    // First attempt: deny permission
+    mockGetUserMedia.mockRejectedValueOnce(new DOMException("Denied", "NotAllowedError"))
+    const first = await analyzer.initialize()
+    expect(first).toBe("error")
+    expect(onError).toHaveBeenCalledTimes(1)
+
+    // User changes browser permission, app calls retry → cleanup() + initialize()
+    analyzer.cleanup()
+    onError.mockClear()
+
+    // Second attempt: succeeds
+    mockGetUserMedia.mockResolvedValueOnce(mockStream)
+    const second = await analyzer.initialize()
+
+    expect(second).toBe("success")
+    expect(mockGetUserMedia).toHaveBeenCalledTimes(2)
+    expect(onError).not.toHaveBeenCalled()
+
+    analyzer.cleanup()
+  })
+
+  it("resume() returns false when called before initialize()", async () => {
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const running = await analyzer.resume()
+    expect(running).toBe(false)
+    expect(analyzer.isSuspended()).toBe(false)
+  })
+
+  it("isSuspended() reflects the current AudioContext state", async () => {
+    vi.stubGlobal("AudioContext", createMockAudioContext({ state: "suspended" }))
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+    await analyzer.initialize()
+
+    expect(analyzer.isSuspended()).toBe(true)
+
+    analyzer.cleanup()
+  })
+
 })
 
 // ----------------------------------------------------------------

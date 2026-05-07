@@ -33,8 +33,10 @@ export default function ClientApp() {
     tempo: null,
   })
 
-  // WAI-ARIA tabs keyboard pattern: Arrow keys navigate, Home/End jump to ends.
-  // Activates on focus (automatic activation) since both panels are cheap to mount.
+  // WAI-ARIA tabs keyboard pattern (manual activation): arrow keys / Home / End
+  // move focus only. The user activates with Enter or Space (handled natively by
+  // <button>). Manual activation is correct here because switching tabs unmounts
+  // the Tuner, which would otherwise re-prompt for mic permission on every arrow press.
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, current: TabId) => {
     const currentIndex = TAB_ORDER.indexOf(current)
     let nextIndex: number | null = null
@@ -58,9 +60,9 @@ export default function ClientApp() {
 
     if (nextIndex === null) return
     event.preventDefault()
-    const nextTab = TAB_ORDER[nextIndex]
-    setActiveTab(nextTab)
-    tabRefs.current[nextTab]?.focus()
+    // Move focus only; do NOT change activeTab. Enter/Space on the focused tab
+    // will fire its onClick and switch panels.
+    tabRefs.current[TAB_ORDER[nextIndex]]?.focus()
   }
 
   useEffect(() => {

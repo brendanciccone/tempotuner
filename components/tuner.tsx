@@ -49,6 +49,17 @@ export default function Tuner() {
             isNoteLocked={state.isNoteLocked}
           />
 
+          {/* Initialising prompt — shown while the mic permission request is in flight. */}
+          {state.isInitializing && !state.error && !state.needsUserGesture && (
+            <div
+              className="w-full mb-4 text-xs text-muted-foreground text-center"
+              role="status"
+              aria-live="polite"
+            >
+              Requesting microphone access…
+            </div>
+          )}
+
           {/* Tap-to-start prompt for iOS Safari (AudioContext requires user gesture). */}
           {state.needsUserGesture && !state.error && (
             <div className="w-full mb-4 flex flex-col items-center gap-2">

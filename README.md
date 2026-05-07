@@ -45,7 +45,7 @@ tests/        → Unit, integration, and security tests
 
 ### Test Types
 
-- **Unit** (`tests/unit/`) — 36 tests covering audio processing, note detection, and tuner initialization (including secure-context detection, mediaDevices feature detection, sample-rate fallback, and DOMException-name error mapping)
+- **Unit** (`tests/unit/`) — 39 tests covering audio processing, note detection, and tuner initialization (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, and the cleanup→re-initialize retry path)
 
 ## Recent Additions
 

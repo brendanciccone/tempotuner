@@ -181,31 +181,33 @@ export class AudioAnalyzer {
    * Names follow the WebRTC spec: https://w3c.github.io/mediacapture-main/#methods
    */
   private classifyError(err: unknown): FailureReason {
-    if (typeof err === "object" && err !== null && "name" in err) {
-      const name = (err as { name: unknown }).name
-      if (typeof name === "string") {
-        switch (name) {
-          case "NotAllowedError":
-          case "PermissionDeniedError": // legacy alias
-            return "permission-denied"
-          case "NotFoundError":
-          case "DevicesNotFoundError": // legacy alias
-            return "no-microphone"
-          case "NotReadableError":
-          case "TrackStartError": // legacy alias
-            return "microphone-busy"
-          case "OverconstrainedError":
-          case "ConstraintNotSatisfiedError": // legacy alias
-            return "constraints-unsupported"
-          case "SecurityError":
-            return "insecure-context"
-          case "AbortError":
-            return "aborted"
-          case "TypeError":
-            // getUserMedia throws TypeError when called with no audio/video constraints
-            // or in non-secure contexts on some browsers
-            return "unsupported-browser"
-        }
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "name" in err &&
+      typeof err.name === "string"
+    ) {
+      switch (err.name) {
+        case "NotAllowedError":
+        case "PermissionDeniedError": // legacy alias
+          return "permission-denied"
+        case "NotFoundError":
+        case "DevicesNotFoundError": // legacy alias
+          return "no-microphone"
+        case "NotReadableError":
+        case "TrackStartError": // legacy alias
+          return "microphone-busy"
+        case "OverconstrainedError":
+        case "ConstraintNotSatisfiedError": // legacy alias
+          return "constraints-unsupported"
+        case "SecurityError":
+          return "insecure-context"
+        case "AbortError":
+          return "aborted"
+        case "TypeError":
+          // getUserMedia throws TypeError when called with no audio/video constraints
+          // or in non-secure contexts on some browsers
+          return "unsupported-browser"
       }
     }
     return "unknown"
