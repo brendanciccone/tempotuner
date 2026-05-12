@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import Image from "next/image"
 import TapTempo from "@/components/tap-tempo"
 import Tuner from "@/components/tuner"
 import { Button } from "@/components/ui/button"
 import { Settings } from "lucide-react"
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -21,10 +21,49 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+type TabId = "tuner" | "tempo"
+const TAB_ORDER: readonly TabId[] = ["tuner", "tempo"] as const
+
 export default function ClientApp() {
   const [mounted, setMounted] = useState(false)
-  const [activeTab, setActiveTab] = useState<"tempo" | "tuner">("tuner")
+  const [activeTab, setActiveTab] = useState<TabId>("tuner")
   const [selectedStyle, setSelectedStyle] = useState("default")
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
+    tuner: null,
+    tempo: null,
+  })
+
+  // WAI-ARIA tabs keyboard pattern (manual activation, horizontal orientation):
+  // ArrowLeft/ArrowRight + Home/End move focus only. The user activates with Enter
+  // or Space (handled natively by <button>). Manual activation avoids re-prompting
+  // for mic permission on every arrow press (switching tabs unmounts the Tuner).
+  // ArrowUp/ArrowDown are intentionally NOT handled — for a horizontal tablist the
+  // APG specifies leaving them alone so they retain native page-scroll behavior.
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, current: TabId) => {
+    const currentIndex = TAB_ORDER.indexOf(current)
+    let nextIndex: number | null = null
+
+    switch (event.key) {
+      case "ArrowRight":
+        nextIndex = (currentIndex + 1) % TAB_ORDER.length
+        break
+      case "ArrowLeft":
+        nextIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length
+        break
+      case "Home":
+        nextIndex = 0
+        break
+      case "End":
+        nextIndex = TAB_ORDER.length - 1
+        break
+    }
+
+    if (nextIndex === null) return
+    event.preventDefault()
+    // Move focus only; do NOT change activeTab. Enter/Space on the focused tab
+    // will fire its onClick and switch panels.
+    tabRefs.current[TAB_ORDER[nextIndex]]?.focus()
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -94,22 +133,44 @@ export default function ClientApp() {
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex w-full mb-4 border border-border rounded-lg overflow-hidden">
+        <div
+          role="tablist"
+          aria-label="Tool selection"
+          className="flex w-full mb-4 border border-border rounded-lg overflow-hidden"
+        >
           <button
+            ref={(el) => {
+              tabRefs.current.tuner = el
+            }}
+            role="tab"
+            id="tab-tuner"
+            aria-selected={activeTab === "tuner"}
+            aria-controls="panel-tuner"
+            tabIndex={activeTab === "tuner" ? 0 : -1}
             onClick={() => setActiveTab("tuner")}
-            className={`flex-1 py-2 text-center font-medium text-sm transition-colors ${
-              activeTab === "tuner" 
-                ? "bg-primary text-primary-foreground font-semibold" 
+            onKeyDown={(e) => handleTabKeyDown(e, "tuner")}
+            className={`flex-1 py-2 text-center font-medium text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              activeTab === "tuner"
+                ? "bg-primary text-primary-foreground font-semibold"
                 : "bg-card text-foreground hover:bg-muted/50"
             }`}
           >
             Tuner
           </button>
           <button
+            ref={(el) => {
+              tabRefs.current.tempo = el
+            }}
+            role="tab"
+            id="tab-tempo"
+            aria-selected={activeTab === "tempo"}
+            aria-controls="panel-tempo"
+            tabIndex={activeTab === "tempo" ? 0 : -1}
             onClick={() => setActiveTab("tempo")}
-            className={`flex-1 py-2 text-center font-medium text-sm transition-colors ${
-              activeTab === "tempo" 
-                ? "bg-primary text-primary-foreground font-semibold" 
+            onKeyDown={(e) => handleTabKeyDown(e, "tempo")}
+            className={`flex-1 py-2 text-center font-medium text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              activeTab === "tempo"
+                ? "bg-primary text-primary-foreground font-semibold"
                 : "bg-card text-foreground hover:bg-muted/50"
             }`}
           >
@@ -118,8 +179,22 @@ export default function ClientApp() {
         </div>
 
         {/* Content */}
-        {activeTab === "tempo" && <TapTempo />}
-        {activeTab === "tuner" && <Tuner key="tuner-component" />}
+        <div
+          role="tabpanel"
+          id="panel-tempo"
+          aria-labelledby="tab-tempo"
+          hidden={activeTab !== "tempo"}
+        >
+          {activeTab === "tempo" && <TapTempo />}
+        </div>
+        <div
+          role="tabpanel"
+          id="panel-tuner"
+          aria-labelledby="tab-tuner"
+          hidden={activeTab !== "tuner"}
+        >
+          {activeTab === "tuner" && <Tuner key="tuner-component" />}
+        </div>
       </div>
     </main>
   )

@@ -12,12 +12,24 @@ const mockSourceDisconnect = vi.fn()
 const mockTrackStop = vi.fn()
 const mockGetFloatTimeDomainData = vi.fn()
 
-const createMockAudioContext = (stateOverride?: string) => {
+interface MockOptions {
+  state?: string
+  /** Throw on `new MockAudioContext({ sampleRate })` to simulate sample-rate rejection. */
+  rejectSampleRate?: boolean
+}
+
+const createMockAudioContext = (options: MockOptions = {}) => {
   return class MockAudioContext {
-    state = stateOverride ?? "running"
+    state: string
     sampleRate = 44100
     resume = mockAudioContextResume
     close = mockAudioContextClose
+    constructor(opts?: AudioContextOptions) {
+      if (options.rejectSampleRate && opts && "sampleRate" in opts) {
+        throw new DOMException("Sample rate not supported", "NotSupportedError")
+      }
+      this.state = options.state ?? "running"
+    }
     createAnalyser = () => ({
       fftSize: 0,
       smoothingTimeConstant: 0,
@@ -34,28 +46,55 @@ const mockStream = {
   getTracks: () => [{ stop: mockTrackStop }],
 }
 
+// Capture original descriptors so afterEach can fully restore globals.
+// Without this, vi.stubGlobal + Object.defineProperty mutations would leak
+// across tests (and potentially across test files when the suite is split).
+let origIsSecureContextDesc: PropertyDescriptor | undefined
+let origMediaDevicesDesc: PropertyDescriptor | undefined
+
 beforeEach(() => {
   vi.clearAllMocks()
 
-  // Mock AudioContext as a proper class
   vi.stubGlobal("AudioContext", createMockAudioContext())
 
-  // Mock getUserMedia
-  if (!navigator.mediaDevices) {
-    Object.defineProperty(navigator, "mediaDevices", {
-      value: { getUserMedia: mockGetUserMedia },
-      writable: true,
-      configurable: true,
-    })
-  } else {
-    navigator.mediaDevices.getUserMedia = mockGetUserMedia
-  }
+  origIsSecureContextDesc = Object.getOwnPropertyDescriptor(window, "isSecureContext")
+  Object.defineProperty(window, "isSecureContext", {
+    value: true,
+    writable: true,
+    configurable: true,
+  })
+
+  // Replace navigator.mediaDevices with a fresh object (spreading any existing
+  // properties). Mutating the existing object would leak the mock onto the
+  // captured descriptor's value and defeat restoration in afterEach.
+  origMediaDevicesDesc = Object.getOwnPropertyDescriptor(navigator, "mediaDevices")
+  const originalMediaDevices = origMediaDevicesDesc?.value as MediaDevices | undefined
+  Object.defineProperty(navigator, "mediaDevices", {
+    value: { ...originalMediaDevices, getUserMedia: mockGetUserMedia },
+    writable: true,
+    configurable: true,
+  })
 
   mockGetUserMedia.mockResolvedValue(mockStream)
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+
+  // Restore the original descriptor when one existed; otherwise delete the
+  // property we injected so we don't leak test-added own properties between
+  // tests (or, in theory, across files when the suite is split).
+  if (origIsSecureContextDesc) {
+    Object.defineProperty(window, "isSecureContext", origIsSecureContextDesc)
+  } else {
+    delete (window as { isSecureContext?: boolean }).isSecureContext
+  }
+  if (origMediaDevicesDesc) {
+    Object.defineProperty(navigator, "mediaDevices", origMediaDevicesDesc)
+  } else {
+    delete (navigator as { mediaDevices?: MediaDevices }).mediaDevices
+  }
 })
 
 // ----------------------------------------------------------------
@@ -65,13 +104,13 @@ afterEach(() => {
 import { AudioAnalyzer } from "@/utils/audio-analyzer"
 
 describe("AudioAnalyzer", () => {
-  it("requests microphone permissions during initialize()", async () => {
+  it("requests microphone permissions and returns 'success' on initialize()", async () => {
     const onError = vi.fn()
     const analyzer = new AudioAnalyzer(onError)
 
-    const success = await analyzer.initialize()
+    const result = await analyzer.initialize()
 
-    expect(success).toBe(true)
+    expect(result).toBe("success")
     expect(mockGetUserMedia).toHaveBeenCalledWith({
       audio: {
         echoCancellation: false,
@@ -81,39 +120,161 @@ describe("AudioAnalyzer", () => {
     })
     expect(onError).not.toHaveBeenCalled()
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
-  it("returns false and calls onError when microphone access is denied", async () => {
-    mockGetUserMedia.mockRejectedValueOnce(new DOMException("Permission denied"))
+  it("returns 'error' and reports a permission-denied message on NotAllowedError", async () => {
+    mockGetUserMedia.mockRejectedValueOnce(new DOMException("Denied", "NotAllowedError"))
 
     const onError = vi.fn()
     const analyzer = new AudioAnalyzer(onError)
 
-    const success = await analyzer.initialize()
+    const result = await analyzer.initialize()
 
-    expect(success).toBe(false)
-    expect(onError).toHaveBeenCalledWith(
-      "Microphone access denied. Please allow microphone access and reload the page."
+    expect(result).toBe("error")
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/access denied/i))
+  })
+
+  it("reports a 'no microphone found' message on NotFoundError", async () => {
+    mockGetUserMedia.mockRejectedValueOnce(new DOMException("No mic", "NotFoundError"))
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("error")
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/no microphone/i))
+  })
+
+  it("reports a 'mic in use' message on NotReadableError", async () => {
+    mockGetUserMedia.mockRejectedValueOnce(new DOMException("Busy", "NotReadableError"))
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("error")
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/in use/i))
+  })
+
+  it("reports a 'constraints unsupported' message on OverconstrainedError", async () => {
+    mockGetUserMedia.mockRejectedValueOnce(
+      new DOMException("Bad constraints", "OverconstrainedError")
     )
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("error")
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/settings/i))
+  })
+
+  it("detects insecure context before requesting microphone", async () => {
+    Object.defineProperty(window, "isSecureContext", {
+      value: false,
+      writable: true,
+      configurable: true,
+    })
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("error")
+    expect(mockGetUserMedia).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/secure connection|HTTPS/i))
+  })
+
+  it("detects missing mediaDevices and reports unsupported browser", async () => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    })
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("error")
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/doesn't support/i))
   })
 
   it("handles missing AudioContext gracefully", async () => {
     vi.stubGlobal("AudioContext", undefined)
-    // Also remove the webkit fallback
     vi.stubGlobal("webkitAudioContext", undefined)
 
     const onError = vi.fn()
     const analyzer = new AudioAnalyzer(onError)
 
-    const success = await analyzer.initialize()
+    const result = await analyzer.initialize()
 
-    expect(success).toBe(false)
-    expect(onError).toHaveBeenCalled()
+    expect(result).toBe("error")
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/web audio is not available/i))
+  })
+
+  it("falls back to default sample rate when 44100 is rejected", async () => {
+    let attempts = 0
+    class FallbackAudioContext {
+      state = "running"
+      sampleRate = 48000
+      resume = mockAudioContextResume
+      close = mockAudioContextClose
+      constructor(opts?: AudioContextOptions) {
+        attempts++
+        if (opts && "sampleRate" in opts) {
+          throw new DOMException("Sample rate not supported", "NotSupportedError")
+        }
+      }
+      createAnalyser = () => ({
+        fftSize: 0,
+        smoothingTimeConstant: 0,
+        getFloatTimeDomainData: mockGetFloatTimeDomainData,
+      })
+      createMediaStreamSource = () => ({
+        connect: mockSourceConnect,
+        disconnect: mockSourceDisconnect,
+      })
+    }
+    vi.stubGlobal("AudioContext", FallbackAudioContext)
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("success")
+    expect(attempts).toBe(2) // first (rejected) + fallback (succeeded)
+    expect(analyzer.getSampleRate()).toBe(48000)
+    expect(onError).not.toHaveBeenCalled()
+
+    await analyzer.cleanup()
+  })
+
+  it("returns 'needs-gesture' when the AudioContext stays suspended after resume()", async () => {
+    // Simulate iOS Safari: resume() resolves but state remains "suspended"
+    vi.stubGlobal("AudioContext", createMockAudioContext({ state: "suspended" }))
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("needs-gesture")
+    expect(mockAudioContextResume).toHaveBeenCalled()
+    expect(analyzer.isSuspended()).toBe(true)
+
+    await analyzer.cleanup()
   })
 
   it("resumes a suspended AudioContext during initialize()", async () => {
-    vi.stubGlobal("AudioContext", createMockAudioContext("suspended"))
+    vi.stubGlobal("AudioContext", createMockAudioContext({ state: "suspended" }))
 
     const onError = vi.fn()
     const analyzer = new AudioAnalyzer(onError)
@@ -122,7 +283,7 @@ describe("AudioAnalyzer", () => {
 
     expect(mockAudioContextResume).toHaveBeenCalled()
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("cleanup() releases all resources", async () => {
@@ -130,11 +291,10 @@ describe("AudioAnalyzer", () => {
     const analyzer = new AudioAnalyzer(onError)
 
     await analyzer.initialize()
-    analyzer.cleanup()
+    await analyzer.cleanup()
 
     expect(mockTrackStop).toHaveBeenCalled()
     expect(mockAudioContextClose).toHaveBeenCalled()
-    // After cleanup, getAudioData should return null
     expect(analyzer.getAudioData()).toBeNull()
   })
 
@@ -145,13 +305,10 @@ describe("AudioAnalyzer", () => {
     await analyzer.initialize()
     expect(mockGetUserMedia).toHaveBeenCalledTimes(1)
 
-    // Reset the initialized state to allow re-initialization without cleanup
-    // In practice, initialize() checks if stream already exists
     await analyzer.initialize()
-    // getUserMedia should not be called again because stream is cached
     expect(mockGetUserMedia).toHaveBeenCalledTimes(1)
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
 
   it("resume() does nothing if AudioContext is already running", async () => {
@@ -159,14 +316,160 @@ describe("AudioAnalyzer", () => {
     const analyzer = new AudioAnalyzer(onError)
     await analyzer.initialize()
 
-    // AudioContext state is "running"
-    await analyzer.resume()
-    // resume should not be called since state is "running"
-    // (resume was called during initialize if suspended, but not during resume() call)
+    const running = await analyzer.resume()
+    expect(running).toBe(true)
     expect(mockAudioContextResume).toHaveBeenCalledTimes(0)
 
-    analyzer.cleanup()
+    await analyzer.cleanup()
   })
+
+  it("resume() returns true when context transitions from suspended to running", async () => {
+    // Custom mock where resume() flips state to "running"
+    const dynamicContext = (() => {
+      let currentState = "suspended"
+      return class {
+        get state() {
+          return currentState
+        }
+        sampleRate = 44100
+        resume = vi.fn().mockImplementation(async () => {
+          currentState = "running"
+        })
+        close = mockAudioContextClose
+        createAnalyser = () => ({
+          fftSize: 0,
+          smoothingTimeConstant: 0,
+          getFloatTimeDomainData: mockGetFloatTimeDomainData,
+        })
+        createMediaStreamSource = () => ({
+          connect: mockSourceConnect,
+          disconnect: mockSourceDisconnect,
+        })
+      }
+    })()
+    vi.stubGlobal("AudioContext", dynamicContext)
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+    const initResult = await analyzer.initialize()
+
+    expect(initResult).toBe("success")
+    expect(analyzer.isSuspended()).toBe(false)
+
+    await analyzer.cleanup()
+  })
+
+  it("falls back to webkitAudioContext when window.AudioContext is missing", async () => {
+    vi.stubGlobal("AudioContext", undefined)
+    vi.stubGlobal("webkitAudioContext", createMockAudioContext())
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("success")
+    expect(onError).not.toHaveBeenCalled()
+
+    await analyzer.cleanup()
+  })
+
+  it("can be re-initialized after cleanup() (the underlying retry mechanism)", async () => {
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    // First attempt: deny permission
+    mockGetUserMedia.mockRejectedValueOnce(new DOMException("Denied", "NotAllowedError"))
+    const first = await analyzer.initialize()
+    expect(first).toBe("error")
+    expect(onError).toHaveBeenCalledTimes(1)
+
+    // User changes browser permission, app calls retry → cleanup() + initialize()
+    await analyzer.cleanup()
+    onError.mockClear()
+
+    // Second attempt: succeeds
+    mockGetUserMedia.mockResolvedValueOnce(mockStream)
+    const second = await analyzer.initialize()
+
+    expect(second).toBe("success")
+    expect(mockGetUserMedia).toHaveBeenCalledTimes(2)
+    expect(onError).not.toHaveBeenCalled()
+
+    await analyzer.cleanup()
+  })
+
+  it("resume() returns false when called before initialize()", async () => {
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const running = await analyzer.resume()
+    expect(running).toBe(false)
+    expect(analyzer.isSuspended()).toBe(false)
+  })
+
+  it("cleanup() does not resolve until AudioContext.close() resolves", async () => {
+    // Regression guard: the Web Audio spec only releases creation-blocking
+    // resources after close()'s Promise resolves. If a future refactor drops
+    // the `await` inside cleanup(), the retry flow could race a new
+    // AudioContext creation against the pending close. Mock close() with a
+    // deferred promise so we can observe that cleanup() actually waits.
+    let resolveClose: (() => void) | undefined
+    const deferredClose = vi.fn().mockImplementation(
+      () => new Promise<void>((resolve) => {
+        resolveClose = resolve
+      })
+    )
+
+    class DeferredCloseContext {
+      state = "running"
+      sampleRate = 44100
+      resume = mockAudioContextResume
+      close = deferredClose
+      createAnalyser = () => ({
+        fftSize: 0,
+        smoothingTimeConstant: 0,
+        getFloatTimeDomainData: mockGetFloatTimeDomainData,
+      })
+      createMediaStreamSource = () => ({
+        connect: mockSourceConnect,
+        disconnect: mockSourceDisconnect,
+      })
+    }
+    vi.stubGlobal("AudioContext", DeferredCloseContext)
+
+    const analyzer = new AudioAnalyzer(vi.fn())
+    await analyzer.initialize()
+
+    let cleanupDone = false
+    const cleanupPromise = analyzer.cleanup().then(() => {
+      cleanupDone = true
+    })
+
+    // Flush microtasks so any non-awaiting cleanup would have settled by now.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(cleanupDone).toBe(false)
+    expect(deferredClose).toHaveBeenCalled()
+
+    // Release close() and confirm cleanup() now settles.
+    resolveClose?.()
+    await cleanupPromise
+    expect(cleanupDone).toBe(true)
+  })
+
+  it("isSuspended() reflects the current AudioContext state", async () => {
+    vi.stubGlobal("AudioContext", createMockAudioContext({ state: "suspended" }))
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+    await analyzer.initialize()
+
+    expect(analyzer.isSuspended()).toBe(true)
+
+    await analyzer.cleanup()
+  })
+
 })
 
 // ----------------------------------------------------------------
@@ -187,7 +490,6 @@ describe("NoteDetector", () => {
     const detector = new NoteDetector()
     let result = null
 
-    // Feed consistent A4 readings until note is confirmed
     for (let i = 0; i < 15; i++) {
       result = detector.detectNote(440, DEFAULT_A4_FREQ, false)
     }
@@ -202,7 +504,6 @@ describe("NoteDetector", () => {
     const detector = new NoteDetector()
     let result = null
 
-    // Bb4 = ~466.16Hz
     for (let i = 0; i < 15; i++) {
       result = detector.detectNote(466.16, DEFAULT_A4_FREQ, true)
     }
@@ -215,7 +516,6 @@ describe("NoteDetector", () => {
     const detector = new NoteDetector()
     let result = null
 
-    // A#4 = ~466.16Hz
     for (let i = 0; i < 15; i++) {
       result = detector.detectNote(466.16, DEFAULT_A4_FREQ, false)
     }
@@ -227,14 +527,12 @@ describe("NoteDetector", () => {
   it("reset() clears all state", () => {
     const detector = new NoteDetector()
 
-    // Build up state
     for (let i = 0; i < 15; i++) {
       detector.detectNote(440, DEFAULT_A4_FREQ, false)
     }
 
     detector.reset()
 
-    // After reset, first readings should return null (hysteresis threshold not met)
     expect(detector.detectNote(440, DEFAULT_A4_FREQ, false)).toBeNull()
     expect(detector.getBufferFillRatio()).toBeLessThan(1)
   })
