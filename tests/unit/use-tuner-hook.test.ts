@@ -61,16 +61,18 @@ beforeEach(() => {
     configurable: true,
   })
 
+  // Replace navigator.mediaDevices with a fresh object (spreading any existing
+  // properties from the real one when present). This avoids mutating the
+  // original object — if we assigned getUserMedia in-place, the captured
+  // descriptor's `.value` would still point at the mutated object, defeating
+  // the restoration logic in afterEach.
   origMediaDevicesDesc = Object.getOwnPropertyDescriptor(navigator, "mediaDevices")
-  if (!navigator.mediaDevices) {
-    Object.defineProperty(navigator, "mediaDevices", {
-      value: { getUserMedia: mockGetUserMedia },
-      writable: true,
-      configurable: true,
-    })
-  } else {
-    navigator.mediaDevices.getUserMedia = mockGetUserMedia
-  }
+  const originalMediaDevices = origMediaDevicesDesc?.value as MediaDevices | undefined
+  Object.defineProperty(navigator, "mediaDevices", {
+    value: { ...originalMediaDevices, getUserMedia: mockGetUserMedia },
+    writable: true,
+    configurable: true,
+  })
 
   mockGetUserMedia.mockResolvedValue(mockStream)
 })
