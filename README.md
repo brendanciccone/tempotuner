@@ -45,7 +45,7 @@ tests/        → Unit, integration, and security tests
 
 ### Test Types
 
-- **Unit** (`tests/unit/`) — 40 tests covering audio processing, note detection, and tuner initialization (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, the cleanup→re-initialize retry path, and a regression guard that `cleanup()` awaits `AudioContext.close()`)
+- **Unit** (`tests/unit/`) — 47 tests covering audio processing, note detection, tuner initialization, and the `useTuner` hook orchestration (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, the cleanup→re-initialize retry path, a regression guard that `cleanup()` awaits `AudioContext.close()`, and the iOS Safari `needs-gesture` → `startWithGesture` flow)
 
 ## Recent Additions
 
