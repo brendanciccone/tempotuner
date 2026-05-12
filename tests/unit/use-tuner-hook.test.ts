@@ -78,11 +78,19 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+
+  // Restore the original descriptor when one existed; otherwise delete the
+  // property we injected so we don't leak test-added own properties between
+  // tests (or, in theory, across files when the suite is split).
   if (origIsSecureContextDesc) {
     Object.defineProperty(window, "isSecureContext", origIsSecureContextDesc)
+  } else {
+    delete (window as { isSecureContext?: boolean }).isSecureContext
   }
   if (origMediaDevicesDesc) {
     Object.defineProperty(navigator, "mediaDevices", origMediaDevicesDesc)
+  } else {
+    delete (navigator as { mediaDevices?: MediaDevices }).mediaDevices
   }
 })
 
