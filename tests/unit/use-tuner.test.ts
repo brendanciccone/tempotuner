@@ -46,33 +46,55 @@ const mockStream = {
   getTracks: () => [{ stop: mockTrackStop }],
 }
 
+// Capture original descriptors so afterEach can fully restore globals.
+// Without this, vi.stubGlobal + Object.defineProperty mutations would leak
+// across tests (and potentially across test files when the suite is split).
+let origIsSecureContextDesc: PropertyDescriptor | undefined
+let origMediaDevicesDesc: PropertyDescriptor | undefined
+
 beforeEach(() => {
   vi.clearAllMocks()
 
   vi.stubGlobal("AudioContext", createMockAudioContext())
 
-  // jsdom: window.isSecureContext is true by default; make it explicit.
+  origIsSecureContextDesc = Object.getOwnPropertyDescriptor(window, "isSecureContext")
   Object.defineProperty(window, "isSecureContext", {
     value: true,
     writable: true,
     configurable: true,
   })
 
-  if (!navigator.mediaDevices) {
-    Object.defineProperty(navigator, "mediaDevices", {
-      value: { getUserMedia: mockGetUserMedia },
-      writable: true,
-      configurable: true,
-    })
-  } else {
-    navigator.mediaDevices.getUserMedia = mockGetUserMedia
-  }
+  // Replace navigator.mediaDevices with a fresh object (spreading any existing
+  // properties). Mutating the existing object would leak the mock onto the
+  // captured descriptor's value and defeat restoration in afterEach.
+  origMediaDevicesDesc = Object.getOwnPropertyDescriptor(navigator, "mediaDevices")
+  const originalMediaDevices = origMediaDevicesDesc?.value as MediaDevices | undefined
+  Object.defineProperty(navigator, "mediaDevices", {
+    value: { ...originalMediaDevices, getUserMedia: mockGetUserMedia },
+    writable: true,
+    configurable: true,
+  })
 
   mockGetUserMedia.mockResolvedValue(mockStream)
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+
+  // Restore the original descriptor when one existed; otherwise delete the
+  // property we injected so we don't leak test-added own properties between
+  // tests (or, in theory, across files when the suite is split).
+  if (origIsSecureContextDesc) {
+    Object.defineProperty(window, "isSecureContext", origIsSecureContextDesc)
+  } else {
+    delete (window as { isSecureContext?: boolean }).isSecureContext
+  }
+  if (origMediaDevicesDesc) {
+    Object.defineProperty(navigator, "mediaDevices", origMediaDevicesDesc)
+  } else {
+    delete (navigator as { mediaDevices?: MediaDevices }).mediaDevices
+  }
 })
 
 // ----------------------------------------------------------------

@@ -177,9 +177,10 @@ export class AudioAnalyzer {
 
       this.isInitialized = true
 
-      // 8. iOS Safari: even after resume(), the context can stay suspended without
-      // an in-gesture call. Surface that to the UI so it can prompt for a tap.
-      if (this.audioContext.state === "suspended") {
+      // 8. iOS Safari: even after resume(), the context can stay suspended
+      // (or in iOS's non-standard "interrupted" state) without an in-gesture
+      // call. Surface that to the UI so it can prompt for a tap.
+      if (this.isSuspended()) {
         return "needs-gesture"
       }
 
