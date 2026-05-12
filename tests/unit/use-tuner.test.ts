@@ -386,6 +386,56 @@ describe("AudioAnalyzer", () => {
     expect(analyzer.isSuspended()).toBe(false)
   })
 
+  it("cleanup() does not resolve until AudioContext.close() resolves", async () => {
+    // Regression guard: the Web Audio spec only releases creation-blocking
+    // resources after close()'s Promise resolves. If a future refactor drops
+    // the `await` inside cleanup(), the retry flow could race a new
+    // AudioContext creation against the pending close. Mock close() with a
+    // deferred promise so we can observe that cleanup() actually waits.
+    let resolveClose: (() => void) | undefined
+    const deferredClose = vi.fn().mockImplementation(
+      () => new Promise<void>((resolve) => {
+        resolveClose = resolve
+      })
+    )
+
+    class DeferredCloseContext {
+      state = "running"
+      sampleRate = 44100
+      resume = mockAudioContextResume
+      close = deferredClose
+      createAnalyser = () => ({
+        fftSize: 0,
+        smoothingTimeConstant: 0,
+        getFloatTimeDomainData: mockGetFloatTimeDomainData,
+      })
+      createMediaStreamSource = () => ({
+        connect: mockSourceConnect,
+        disconnect: mockSourceDisconnect,
+      })
+    }
+    vi.stubGlobal("AudioContext", DeferredCloseContext)
+
+    const analyzer = new AudioAnalyzer(vi.fn())
+    await analyzer.initialize()
+
+    let cleanupDone = false
+    const cleanupPromise = analyzer.cleanup().then(() => {
+      cleanupDone = true
+    })
+
+    // Flush microtasks so any non-awaiting cleanup would have settled by now.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(cleanupDone).toBe(false)
+    expect(deferredClose).toHaveBeenCalled()
+
+    // Release close() and confirm cleanup() now settles.
+    resolveClose?.()
+    await cleanupPromise
+    expect(cleanupDone).toBe(true)
+  })
+
   it("isSuspended() reflects the current AudioContext state", async () => {
     vi.stubGlobal("AudioContext", createMockAudioContext({ state: "suspended" }))
 

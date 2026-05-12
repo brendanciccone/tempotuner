@@ -324,6 +324,9 @@ export function useTuner(): [TunerState, TunerActions] {
       // Resource-only cleanup on unmount — resetDisplay() would schedule setState
       // on an unmounted component. UI reset isn't needed since the component is gone.
       // Fire-and-forget: we don't want to block React's unmount on close() resolving.
+      // Caveat: under React strict mode in development, the cleanup → re-mount
+      // sequence can briefly overlap the previous AudioContext's pending close()
+      // with a new context. Acceptable in dev only; production never double-mounts.
       void cleanupResources()
     }
   }, [initialise, cleanupResources])

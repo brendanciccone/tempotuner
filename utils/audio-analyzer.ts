@@ -1,5 +1,14 @@
 import { detectPitchYIN, getRMS, SIGNAL_THRESHOLD } from "@/utils/audio-processing"
 
+// Augment Window so we can access the legacy webkit-prefixed AudioContext
+// constructor without a cast. Some older WebKit builds (and Safari versions
+// predating the unprefixed constructor) only expose this name.
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext
+  }
+}
+
 // Noise floor tracking constants
 const NOISE_FLOOR_ALPHA = 0.05 // Slow EMA for ambient noise estimation
 const NOISE_FLOOR_MULTIPLIER = 3 // Signal must be N× above noise floor
@@ -158,6 +167,11 @@ export class AudioAnalyzer {
       // 7. Detect whether getFloatTimeDomainData is available (missing on older iOS Safari)
       if (typeof this.analyser.getFloatTimeDomainData !== "function") {
         this.useFloatData = false
+        // Cast is required because `new Uint8Array(n)` infers the generic as
+        // `ArrayBufferLike` under TS 5.7+ buffer-typed arrays, but the field
+        // type is the narrower `Uint8Array<ArrayBuffer>` (we never use a
+        // SharedArrayBuffer here — getByteTimeDomainData writes into a plain
+        // ArrayBuffer-backed view).
         this.byteBuffer = new Uint8Array(this.analyser.fftSize) as Uint8Array<ArrayBuffer>
       }
 
@@ -218,9 +232,7 @@ export class AudioAnalyzer {
    * but falling back to the device default if that rate is unsupported.
    */
   private createAudioContext(): AudioContext | null {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
 
     if (typeof AudioContextClass !== "function") {
       return null
