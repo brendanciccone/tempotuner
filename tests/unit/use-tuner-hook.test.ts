@@ -43,17 +43,25 @@ const mockStream = {
   getTracks: () => [{ stop: mockTrackStop }],
 }
 
+// Capture original descriptors so afterEach can fully restore globals.
+// Without this, vi.stubGlobal + Object.defineProperty mutations would leak
+// across tests (and potentially across test files when the suite is split).
+let origIsSecureContextDesc: PropertyDescriptor | undefined
+let origMediaDevicesDesc: PropertyDescriptor | undefined
+
 beforeEach(() => {
   vi.clearAllMocks()
 
   vi.stubGlobal("AudioContext", createMockAudioContext())
 
+  origIsSecureContextDesc = Object.getOwnPropertyDescriptor(window, "isSecureContext")
   Object.defineProperty(window, "isSecureContext", {
     value: true,
     writable: true,
     configurable: true,
   })
 
+  origMediaDevicesDesc = Object.getOwnPropertyDescriptor(navigator, "mediaDevices")
   if (!navigator.mediaDevices) {
     Object.defineProperty(navigator, "mediaDevices", {
       value: { getUserMedia: mockGetUserMedia },
@@ -69,6 +77,13 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  if (origIsSecureContextDesc) {
+    Object.defineProperty(window, "isSecureContext", origIsSecureContextDesc)
+  }
+  if (origMediaDevicesDesc) {
+    Object.defineProperty(navigator, "mediaDevices", origMediaDevicesDesc)
+  }
 })
 
 // ----------------------------------------------------------------
@@ -186,8 +201,12 @@ describe("useTuner", () => {
       await result.current[1].retry()
     })
 
-    expect(result.current[0].error).toBeNull()
-    expect(result.current[0].isInitializing).toBe(false)
+    // Wrap in waitFor — retry() awaits stopTuner() + initialise(), and the
+    // setIsInitializing(false) call lands on a later microtask via act's flush.
+    await waitFor(() => {
+      expect(result.current[0].error).toBeNull()
+      expect(result.current[0].isInitializing).toBe(false)
+    })
     // Both attempts should have called getUserMedia (the second is the retry).
     expect(mockGetUserMedia).toHaveBeenCalledTimes(2)
 
