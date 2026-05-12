@@ -1,0 +1,19 @@
+# Dependency Discipline
+
+## Adding Dependencies
+- Don't add a dependency for something trivially implementable in a few lines — write the code instead
+- Prefer well-maintained packages: recent commits, recent releases, healthy issue tracker, multiple maintainers
+- Flag every new dependency for review in the PR/commit description rather than silently installing it
+- Justify the choice: what it does, why a hand-rolled version isn't appropriate, who maintains it
+
+## Source
+- Prefer the public registry (npm) — if a dependency must come from a non-registry source (git ref, URL, tarball, GitHub fork), flag it explicitly and explain why
+- Avoid `latest` and floating tags in `package.json`; pin exact versions or use caret/tilde with intent
+
+## Versions
+- Pin exact versions for tools where a silent minor bump could break the build (build tooling, codegen, type generators)
+- Keep the lockfile (`pnpm-lock.yaml`) in sync and committed — never delete or regenerate it casually
+
+## Removing Dependencies
+- When code that used a dependency is deleted, remove the dependency in the same change
+- Don't leave unused packages in `package.json` "in case we need it later"
