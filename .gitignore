@@ -11,6 +11,10 @@
 .npmrc
 .pnpmrc
 
+# enforce pnpm — ignore other lockfiles
+package-lock.json
+yarn.lock
+
 # testing
 /coverage
 
