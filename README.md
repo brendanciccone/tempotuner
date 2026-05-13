@@ -22,19 +22,6 @@ pnpm install
 pnpm dev
 ```
 
-## Supply-chain protection
-
-This project assumes contributors have [Aikido Safe Chain](https://github.com/AikidoSec/safe-chain) installed locally. Safe Chain wraps `npm`/`pnpm`/`yarn`/`npx`/`pip`/`uv`/`poetry` to block known-malicious packages and quarantine versions under 48 hours old at install time — defense against npm supply-chain attacks like Shai-Hulud.
-
-One-time install:
-
-```bash
-curl -fsSL https://safechain.aikido.dev/install.sh | bash
-# then restart your terminal
-```
-
-No tokens or config required. Free and open source.
-
 ## Scripts
 
 - `pnpm dev` - Start dev server
@@ -64,6 +51,8 @@ tests/        → Unit, integration, and security tests
 
 ### May 2026
 
+- Supply-chain hardening: `package.json` pins pnpm via `packageManager` and blocks all install scripts with an empty `pnpm.onlyBuiltDependencies` allowlist; Renovate enforces a 7-day release-age quarantine on non-security updates
+- New repo rules: error-handling boundaries, dependency-discipline (no `latest` tags, justify new packages), and a duplication guideline that discourages premature abstraction
 - Cross-browser tuner hardening: secure-context check, `navigator.mediaDevices` feature detection (in-app webviews / older browsers), and 44100Hz sample-rate fallback for hardware that rejects it
 - Specific error messages mapped from DOMException names: permission denied, no microphone, microphone in use, unsupported constraints, insecure context
 - iOS Safari "tap to start" prompt when the AudioContext stays suspended after `resume()` outside a user gesture

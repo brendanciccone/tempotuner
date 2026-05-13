@@ -1,24 +1,29 @@
 # Error Handling
 
 ## Where to Catch
+
 - Only wrap code in `try`/`catch` at real boundaries: external API calls, user input parsing, file I/O, database queries
 - Internal calls between trusted code should not be wrapped — let errors propagate to a boundary that can do something useful
 - An API route handler is a boundary; a helper called only from that handler is not
 
 ## Never Swallow Errors
+
 - No empty `catch` blocks
 - No catch-and-return-`null` / catch-and-return-default that hides the failure
 - No catch-and-`console.log`-and-continue
 - If you catch, either handle the error meaningfully, rethrow it, or rethrow as a more specific error type
 
 ## No Silent Fallbacks
+
 - Returning a default value when an operation fails masks the failure and produces wrong results downstream
 - If a fallback is genuinely correct behaviour, document why in a comment — otherwise let the error surface
 
 ## Error Context
+
 - Error responses (HTTP 4xx/5xx, thrown errors) must include enough context to diagnose the issue
 - Preserve the original error as `cause` when rethrowing: `throw new Error('failed to parse config', { cause: err })`
 
 ## Loops
+
 - Never catch-and-continue inside a loop when the failure indicates bad state
 - If one iteration's failure means subsequent iterations are unsafe, stop the loop and surface the error
