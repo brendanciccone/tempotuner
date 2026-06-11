@@ -13,9 +13,11 @@ A simple tuner and metronome web app. Uses the Web Audio API to detect pitch in 
 
 Built with Next.js 16, TypeScript, TailwindCSS, and Shadcn/UI components. Audio processing uses the Web Audio API.
 
+Deployed as a static export (`output: 'export'`) to Cloudflare Pages — see [DEPLOY.md](DEPLOY.md). Railway remains available as a fallback via the standalone build.
+
 ## Setup
 
-Requires Node.js 18+ and PNPM.
+Requires Node.js 22+ and PNPM. (Next.js 16 needs at least Node 20.9; the pinned `wrangler` used by `pnpm run deploy` needs 22.)
 
 ```bash
 pnpm install
@@ -26,7 +28,8 @@ pnpm dev
 
 - `pnpm dev` - Start dev server
 - `pnpm build` - Production build
-- `pnpm start` - Start production server
+- `pnpm start` - Start production server (Railway fallback only; not used on Cloudflare)
+- `pnpm run deploy` - Build and deploy `out/` to Cloudflare Pages (must be `pnpm run deploy`, not `pnpm deploy`)
 - `pnpm lint` - Run linter
 - `pnpm test` - Run all tests
 - `pnpm test:unit` - Run unit tests
@@ -48,6 +51,10 @@ tests/        → Unit, integration, and security tests
 - **Unit** (`tests/unit/`) — 47 tests covering audio processing, note detection, tuner initialization, and the `useTuner` hook orchestration (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, the cleanup→re-initialize retry path, a regression guard that `cleanup()` awaits `AudioContext.close()`, and the iOS Safari `needs-gesture` → `startWithGesture` flow)
 
 ## Recent Additions
+
+### June 2026
+
+- Migrated hosting from Railway (always-on container) to Cloudflare Pages (static export, scale-to-zero, free tier): `next.config.mjs` now builds `output: 'export'` with unoptimized images, `pnpm run deploy` publishes `out/` via a pinned `wrangler` devDependency, and `DEPLOY.md` documents setup, DNS, and the Railway rollback path (`RAILWAY_ENVIRONMENT` switches the build back to standalone)
 
 ### May 2026
 
