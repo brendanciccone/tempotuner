@@ -52,6 +52,7 @@ Apex CNAMEs require Cloudflare DNS (CNAME flattening). Wait for the custom-domai
 The Railway configuration is still in place as a fallback:
 
 - `next.config.mjs` automatically switches to `output: 'standalone'` when Railway's auto-injected `RAILWAY_ENVIRONMENT` variable is present, so a Railway build of this same repo still produces the always-on server it ran before the migration.
-- To roll back: re-point DNS at the Railway service and redeploy there. No code changes are needed.
+- The Railway service serves on its temporary `*.up.railway.app` domain (the custom domain was never attached to Railway), so it stays reachable there — independent of any DNS changes — until the service is deleted.
+- To roll back: remove the custom domain from the Pages project and use the Railway temp URL (or attach `tempotuner.app` to the Railway service). No code changes are needed.
 
 Once the Cloudflare deployment is verified in production, the Railway service can be torn down manually; the conditional in `next.config.mjs` can then be simplified to `output: 'export'`.
