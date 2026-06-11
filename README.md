@@ -33,6 +33,10 @@ pnpm dev
 - `pnpm test:integration` - Run integration tests
 - `pnpm test:security` - Run security tests
 
+## Deployment
+
+Deployed on Vercel (zero-config — the app is fully static with no API routes, crons, or env vars). See [DEPLOY.md](DEPLOY.md) for setup, DNS cutover, and how to roll back to the Railway fallback.
+
 ## Project Structure
 
 ```
@@ -48,6 +52,10 @@ tests/        → Unit, integration, and security tests
 - **Unit** (`tests/unit/`) — 47 tests covering audio processing, note detection, tuner initialization, and the `useTuner` hook orchestration (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, the cleanup→re-initialize retry path, a regression guard that `cleanup()` awaits `AudioContext.close()`, and the iOS Safari `needs-gesture` → `startWithGesture` flow)
 
 ## Recent Additions
+
+### June 2026
+
+- Migrated hosting from Railway to Vercel: added `DEPLOY.md` (deploy steps, DNS cutover, Railway rollback) and `.env.example`; `output: 'standalone'` stays in `next.config.mjs` for the Railway fallback (Vercel ignores it)
 
 ### May 2026
 
