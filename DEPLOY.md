@@ -24,13 +24,12 @@ Requires **Node.js 22+** — the pinned `wrangler` version declares `engines.nod
 
 ```bash
 pnpm install
-pnpm build
 pnpm run deploy
 ```
 
 > Use `pnpm run deploy`, not `pnpm deploy` — the latter is a pnpm built-in workspace command and will not run the script.
 
-`pnpm build` writes the static site to `out/`; `pnpm run deploy` runs `wrangler pages deploy out --project-name tempotuner`.
+`pnpm run deploy` always builds first: it runs `pnpm build` (writing the static site to `out/`) and then `wrangler pages deploy out --project-name tempotuner`, so it can never publish stale output.
 
 ### Environment variables
 

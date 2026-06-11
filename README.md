@@ -29,7 +29,7 @@ pnpm dev
 - `pnpm dev` - Start dev server
 - `pnpm build` - Production build
 - `pnpm start` - Start production server (Railway fallback only; not used on Cloudflare)
-- `pnpm run deploy` - Deploy `out/` to Cloudflare Pages (must be `pnpm run deploy`, not `pnpm deploy`)
+- `pnpm run deploy` - Build and deploy `out/` to Cloudflare Pages (must be `pnpm run deploy`, not `pnpm deploy`)
 - `pnpm lint` - Run linter
 - `pnpm test` - Run all tests
 - `pnpm test:unit` - Run unit tests
