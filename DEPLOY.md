@@ -4,6 +4,8 @@ TempoTuner deploys as a fully static site (Next.js `output: 'export'`) to Cloudf
 
 ## Deploying to Cloudflare Pages
 
+Requires **Node.js 22+** — the pinned `wrangler` version declares `engines.node >=22.0.0`, so `pnpm run deploy` fails on older Node.
+
 ### First-time setup
 
 1. Authenticate wrangler (opens a browser):

@@ -17,7 +17,7 @@ Deployed as a static export (`output: 'export'`) to Cloudflare Pages — see [DE
 
 ## Setup
 
-Requires Node.js 18+ and PNPM.
+Requires Node.js 22+ and PNPM. (Next.js 16 needs at least Node 20.9; the pinned `wrangler` used by `pnpm run deploy` needs 22.)
 
 ```bash
 pnpm install
