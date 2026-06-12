@@ -7,6 +7,7 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://tempotuner.fourpixels.workers.dev"),
   title: "Tuner, Metronome, and Tap Tempo | TempoTuner",
   description: "Chromatic tuner for any instrument, meteronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
   icons: {
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
     title: "Tuner, Metronome, and Tap Tempo | TempoTuner",
     description: "Chromatic tuner for any instrument, meteronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
     type: "website",
-    url: "https://tempotuner.app",
+    url: "https://tempotuner.fourpixels.workers.dev",
     siteName: "TempoTuner",
     locale: "en_US",
     images: [
