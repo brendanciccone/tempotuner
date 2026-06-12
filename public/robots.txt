@@ -31,4 +31,4 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://tempotuner.app/sitemap.xml
+Sitemap: https://tempotuner.fourpixels.workers.dev/sitemap.xml

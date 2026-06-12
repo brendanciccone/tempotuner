@@ -35,7 +35,9 @@ None at runtime. The app has no API keys, secrets, or build-time configuration �
 
 ### Domains
 
-The Worker serves on `tempotuner.<account-subdomain>.workers.dev` by default. To attach the real domain: Worker → **Settings → Domains & Routes → Add → Custom domain** → `tempotuner.app`. Cloudflare creates the DNS record automatically when the zone is on the same account. Wait for the domain status to read **Active** before tearing anything down. The `workers.dev` route can be disabled there afterwards if you don't want the site answering on two URLs.
+Production is the Worker's own URL: **https://tempotuner.fourpixels.workers.dev** — no custom domain is attached. That URL is also the canonical one baked into the site (`metadataBase` and OpenGraph URL in `app/layout.tsx`, `baseUrl` in `app/sitemap.ts`, and the `Sitemap:` line in `public/robots.txt`).
+
+To attach a custom domain later: Worker → **Settings → Domains & Routes → Add → Custom domain**. If you do, update the three canonical-URL spots above to the new domain in the same change.
 
 ## Rolling back to Railway
 

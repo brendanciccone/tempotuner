@@ -4,7 +4,7 @@ export const dynamic = 'force-static'
 export const revalidate = false
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://tempotuner.app'
+  const baseUrl = 'https://tempotuner.fourpixels.workers.dev'
   const currentDate = new Date().toISOString().split('T')[0]
 
   return [
