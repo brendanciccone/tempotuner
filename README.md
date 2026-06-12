@@ -13,7 +13,7 @@ A simple tuner and metronome web app. Uses the Web Audio API to detect pitch in 
 
 Built with Next.js 16, TypeScript, TailwindCSS, and Shadcn/UI components. Audio processing uses the Web Audio API.
 
-Deployed as a static export (`output: 'export'`) to Cloudflare Pages — see [DEPLOY.md](DEPLOY.md). Railway remains available as a fallback via the standalone build.
+Deployed as a static export (`output: 'export'`) to Cloudflare Workers (static assets) — see [DEPLOY.md](DEPLOY.md). Railway remains available as a fallback via the standalone build.
 
 ## Setup
 
@@ -29,7 +29,7 @@ pnpm dev
 - `pnpm dev` - Start dev server
 - `pnpm build` - Production build
 - `pnpm start` - Start production server (Railway fallback only; not used on Cloudflare)
-- `pnpm run deploy` - Build and deploy `out/` to Cloudflare Pages (must be `pnpm run deploy`, not `pnpm deploy`)
+- `pnpm run deploy` - Build and deploy `out/` to Cloudflare Workers (must be `pnpm run deploy`, not `pnpm deploy`)
 - `pnpm lint` - Run linter
 - `pnpm test` - Run all tests
 - `pnpm test:unit` - Run unit tests
@@ -54,7 +54,8 @@ tests/        → Unit, integration, and security tests
 
 ### June 2026
 
-- Migrated hosting from Railway (always-on container) to Cloudflare Pages (static export, scale-to-zero, free tier): `next.config.mjs` now builds `output: 'export'` with unoptimized images, `pnpm run deploy` publishes `out/` via a pinned `wrangler` devDependency, and `DEPLOY.md` documents setup, DNS, and the Railway rollback path (`RAILWAY_ENVIRONMENT` switches the build back to standalone)
+- Switched the Cloudflare target from Pages to Workers static assets (Cloudflare's recommended platform for new projects): added `wrangler.jsonc` declaring an assets-only Worker serving `out/`, which also prevents `wrangler deploy` auto-config from installing the OpenNext SSR adapter against this static-export build
+- Migrated hosting from Railway (always-on container) to Cloudflare (static export, scale-to-zero, free tier): `next.config.mjs` now builds `output: 'export'` with unoptimized images, `pnpm run deploy` publishes `out/` via a pinned `wrangler` devDependency, and `DEPLOY.md` documents setup, DNS, and the Railway rollback path (`RAILWAY_ENVIRONMENT` switches the build back to standalone)
 
 ### May 2026
 

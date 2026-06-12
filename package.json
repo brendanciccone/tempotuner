@@ -19,7 +19,7 @@
     "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "deploy": "pnpm build && wrangler pages deploy out --project-name tempotuner",
+    "deploy": "pnpm build && wrangler deploy",
     "lint": "next lint",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",

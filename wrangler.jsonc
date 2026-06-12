@@ -1,0 +1,12 @@
+// Static-assets-only Worker: no server code. The presence of this file also
+// stops `wrangler deploy` auto-config from installing the OpenNext SSR adapter,
+// which this static-export site must not use.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tempotuner",
+  "compatibility_date": "2026-06-12",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page"
+  }
+}
