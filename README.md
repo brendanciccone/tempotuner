@@ -54,6 +54,8 @@ tests/        → Unit, integration, and security tests
 
 ### June 2026
 
+- Added `public/_headers`: hashed assets under `/_next/static/*` are now served with `Cache-Control: public,max-age=31536000,immutable`, eliminating revalidation round-trips for repeat visitors
+
 - Canonical URLs (OpenGraph `metadataBase`/`url`, sitemap, robots.txt) now point at the production Worker URL `tempotuner.fourpixels.workers.dev` — no custom domain is attached
 - Switched the Cloudflare target from Pages to Workers static assets (Cloudflare's recommended platform for new projects): added `wrangler.jsonc` declaring an assets-only Worker serving `out/`, which also prevents `wrangler deploy` auto-config from installing the OpenNext SSR adapter against this static-export build
 - Migrated hosting from Railway (always-on container) to Cloudflare (static export, scale-to-zero, free tier): `next.config.mjs` now builds `output: 'export'` with unoptimized images, `pnpm run deploy` publishes `out/` via a pinned `wrangler` devDependency, and `DEPLOY.md` documents setup, DNS, and the Railway rollback path (`RAILWAY_ENVIRONMENT` switches the build back to standalone)

@@ -1,0 +1,7 @@
+# https://developers.cloudflare.com/workers/static-assets/headers/
+# Next.js content-hashes every filename under /_next/static/, so these
+# assets can never change in place — safe to cache for a year, immutable.
+# Do NOT widen this rule: HTML and root assets (favicons, og-image) keep
+# stable names and must stay revalidatable so deploys reach returning visitors.
+/_next/static/*
+  Cache-Control: public,max-age=31536000,immutable
