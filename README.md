@@ -54,6 +54,7 @@ tests/        → Unit, integration, and security tests
 
 ### June 2026
 
+- Resolved all open Dependabot alerts (dev-dependency transitives): bumped the `vite` override to `8.0.16` (fixes the `server.fs.deny` Windows bypass and the bundled `launch-editor` NTLMv2 UNC-path disclosure), upgraded `wrangler` to `4.104.0` (pulls the patched `esbuild@0.28.1`, `undici@7.28.0`, and `ws@8.21.0`), and added an `undici@^7.28.0` override to patch the remaining `jsdom` path — `pnpm audit` is now clean
 - Added `public/_headers`: hashed assets under `/_next/static/*` are now served with `Cache-Control: public,max-age=31536000,immutable`, eliminating revalidation round-trips for repeat visitors
 
 - Canonical URLs (OpenGraph `metadataBase`/`url`, sitemap, robots.txt) now point at the production Worker URL `tempotuner.fourpixels.workers.dev` — no custom domain is attached
