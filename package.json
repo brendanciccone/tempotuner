@@ -11,7 +11,8 @@
       "tar-fs": "^3.0.9",
       "lodash": "^4.18.0",
       "vite@^8.0.0": "8.0.16",
-      "postcss": "^8.5.10",
+      "postcss": "^8.5.24",
+      "sharp": "^0.35.3",
       "undici": "^7.28.0"
     },
     "onlyBuiltDependencies": []
@@ -87,7 +88,7 @@
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "jsdom": "^29.0.1",
-    "postcss": "^8.5.10",
+    "postcss": "^8.5.24",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.2",
     "vitest": "^4.1.1",

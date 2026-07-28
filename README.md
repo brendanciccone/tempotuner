@@ -52,6 +52,10 @@ tests/        → Unit, integration, and security tests
 
 ## Recent Additions
 
+### July 2026
+
+- Resolved two high-severity Dependabot alerts: raised the `postcss` override to `^8.5.24` (GHSA-r28c-9q8g-f849 — a `sourceMappingURL` path traversal that let untrusted CSS disclose arbitrary `.map` file contents, patched in 8.5.18) and added a `sharp@^0.35.3` override (GHSA-f88m-g3jw-g9cj — libvips CVE-2026-33327/33328/35590/35591, patched in 0.35.0). Both arrive transitively — `postcss` via `next` and `autoprefixer`, `sharp` via `wrangler` → `miniflare` and `next` — and both dependents pin versions that need an override to lift. `pnpm audit` is clean again
+
 ### June 2026
 
 - Resolved all open Dependabot alerts (dev-dependency transitives): bumped the `vite` override to `8.0.16` (fixes the `server.fs.deny` Windows bypass and the bundled `launch-editor` NTLMv2 UNC-path disclosure), upgraded `wrangler` to `4.104.0` (pulls the patched `esbuild@0.28.1`, `undici@7.28.0`, and `ws@8.21.0`), and added an `undici@^7.28.0` override to patch the remaining `jsdom` path — `pnpm audit` is now clean
