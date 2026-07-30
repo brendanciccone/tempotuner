@@ -81,9 +81,14 @@
   --stroke: var(--phosphor-90);
   --stroke-dim: var(--phosphor-50);
 
-  --glow-text: 0 0 2px rgba(var(--gas-1), 0.6), 0 0 9px rgba(var(--gas-2), 0.26),
-    0 0 24px rgba(var(--gas-3), 0.1);
-  --glow-box: 0 0 8px rgba(var(--gas-1), 0.32), inset 0 0 10px rgba(var(--gas-1), 0.07);
+  /* Plasma is always on here, so the amplified halo lives at the root rather
+     than on the frame. Scoping it to .ac-screen left portaled content — every
+     Radix dropdown and dialog, which mount to <body> — glowing at a different
+     intensity from the panel that opened them. */
+  --glow-text: 0 0 2px rgba(var(--gas-4), 0.75), 0 0 9px rgba(var(--gas-2), 0.4),
+    0 0 26px rgba(var(--gas-3), 0.2), 0 0 56px rgba(var(--gas-3), 0.1);
+  --glow-box: 0 0 11px rgba(var(--gas-1), 0.4), 0 0 34px rgba(var(--gas-2), 0.16),
+    inset 0 0 14px rgba(var(--gas-1), 0.1);
 
   /* The cell matrix: --ac-mesh-pitch is the cell spacing, --ac-mesh-wire the
      per-axis alpha of one barrier rib. The alpha is a legibility budget, not a
@@ -277,12 +282,14 @@
 }
 
 /* --- The screen ------------------------------------------------------------
-   Three simulations on one frame, stacked deliberately:
+   Three simulations in one fixed layer (.ac-glass, z-index 200), stacked
+   deliberately within it:
 
-     40  .ac-bloom::before   plasma bleed
-     45  .ac-retrace         CRT retrace band
-     48  .ac-mesh            plasma cell mesh
-     50  .ac-crt::after      scanlines and vignette
+     1  .ac-bloom          plasma bleed
+     2  .ac-retrace        CRT retrace band
+     3  .ac-mesh           plasma cell mesh
+     4  .ac-scanlines      CRT scanline texture
+     5  .ac-glass::after   vignette
 
    The mesh sits ABOVE the bleed, which is upside down physically — but the
    bleed is a viewport-sized backdrop-filter, and anything inside its backdrop
@@ -291,31 +298,40 @@
 
 @layer components {
   .ac-screen {
-    position: relative;
     display: flex;
     flex-direction: column;
     /* SMALL viewport height: 100vh overflows once a phone's URL bar shows, and
-       100dvh re-resolves on every scroll, reflowing a frame that is dragging a
-       viewport-sized backdrop-filter behind it. */
+       100dvh re-resolves on every scroll, reflowing the frame on every slide. */
     min-height: 100vh;
     min-height: 100svh;
-    /* `clip` rather than `hidden` — `hidden` would make this a scroll container
-       and the overlays would scroll with the content instead of the glass. */
-    overflow: clip;
-    /* Plasma amplifies the glow tokens for every descendant. */
-    --glow-text: 0 0 2px rgba(var(--gas-4), 0.75), 0 0 9px rgba(var(--gas-2), 0.4),
-      0 0 26px rgba(var(--gas-3), 0.2), 0 0 56px rgba(var(--gas-3), 0.1);
-    --glow-box: 0 0 11px rgba(var(--gas-1), 0.4), 0 0 34px rgba(var(--gas-2), 0.16),
-      inset 0 0 14px rgba(var(--gas-1), 0.1);
+  }
+
+  /* THE GLASS.
+
+     Fixed to the viewport and above every portal, which is the whole point:
+     Radix mounts dropdowns and dialogs to <body>, outside the frame, so an
+     overlay scoped to .ac-screen stopped at their edge and they rendered flat
+     against a panel that was visibly behind glass. A screen simulation that
+     stops at the edge of a dropdown is not simulating a screen.
+
+     Fixed rather than absolute is also the cheaper and more accurate of the
+     two: the glass is exactly one viewport, never the full scroll height, and
+     it holds still while the image behind it moves.
+
+     z-index clears Radix content (50) and the toast viewport (100). */
+  .ac-glass {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    pointer-events: none;
   }
 
   /* Plasma bleed — the soft halo the front glass puts over the whole panel,
      breathing on a 9s mains cycle. */
-  .ac-screen::before {
-    content: "";
+  .ac-bloom {
     position: absolute;
     inset: 0;
-    z-index: 40;
+    z-index: 1;
     pointer-events: none;
     backdrop-filter: blur(3.5px) brightness(1.22) saturate(1.08);
     -webkit-backdrop-filter: blur(3.5px) brightness(1.22) saturate(1.08);
@@ -326,18 +342,35 @@
     animation: ac-bloom-breathe 9s ease-in-out infinite;
   }
 
-  /* Scanline texture and vignette, drifting one cell per 11s with a faint mains
-     flicker on top. */
-  .ac-screen::after {
+  /* Scanline texture, drifting one cell per 11s with a faint mains flicker.
+
+     The drift is a transform on an over-tall layer, NOT an animated
+     background-position. Both look identical; background-position repaints the
+     full viewport every frame while transform stays on the compositor. Measured
+     over six seconds of idle: the background-position version was the single
+     most expensive thing on the panel, ~4x the cost of the plasma bleed it was
+     sitting next to. The extra 3px of height is exactly one cell pitch, so the
+     layer can travel a whole cell without exposing its top edge. */
+  .ac-scanlines {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -3px;
+    height: calc(100% + 3px);
+    z-index: 4;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.15) 0 1px, transparent 1px 3px);
+    animation: ac-crt-drift 11s linear infinite, ac-crt-hum 5.5s ease-in-out infinite;
+  }
+
+  /* The vignette is static and must not travel with the scanlines. */
+  .ac-glass::after {
     content: "";
     position: absolute;
     inset: 0;
-    z-index: 50;
+    z-index: 5;
     pointer-events: none;
-    background:
-      radial-gradient(135% 125% at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.34) 100%),
-      repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.15) 0 1px, transparent 1px 3px);
-    animation: ac-crt-drift 11s linear infinite, ac-crt-hum 5.5s ease-in-out infinite;
+    background: radial-gradient(135% 125% at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.34) 100%);
   }
 
   /* The screen door: a cell lights at the crossing of a row and a column wire,
@@ -346,7 +379,7 @@
   .ac-mesh {
     position: absolute;
     inset: 0;
-    z-index: 48;
+    z-index: 3;
     pointer-events: none;
     background:
       repeating-linear-gradient(
@@ -371,7 +404,7 @@
     right: 0;
     top: 0;
     height: 26%;
-    z-index: 45;
+    z-index: 2;
     pointer-events: none;
     mix-blend-mode: screen;
     opacity: 0.32;
@@ -398,10 +431,10 @@
 
 @keyframes ac-crt-drift {
   from {
-    background-position: 0 0, 0 0;
+    transform: translate3d(0, 0, 0);
   }
   to {
-    background-position: 0 0, 0 -3px;
+    transform: translate3d(0, 3px, 0);
   }
 }
 
@@ -473,8 +506,8 @@
    goes, and the retrace band goes with it: a sweep that cannot sweep is a
    stationary bright stripe across the screen. */
 @media (prefers-reduced-motion: reduce) {
-  .ac-screen::before,
-  .ac-screen::after,
+  .ac-bloom,
+  .ac-scanlines,
   .ac-mesh,
   .blink {
     animation: none;
@@ -490,10 +523,7 @@
    that carry the layout, and keep inverse video — "the machine is speaking" is
    information, not decoration. */
 @media (forced-colors: active) {
-  .ac-screen::before,
-  .ac-screen::after,
-  .ac-mesh,
-  .ac-retrace {
+  .ac-glass {
     display: none;
   }
 

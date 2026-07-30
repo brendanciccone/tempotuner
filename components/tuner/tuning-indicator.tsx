@@ -13,11 +13,16 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected }: TuningI
 
   // Law 1: one gas, many intensities. In tune is the brightest thing on the
   // panel and the only lit fill; off-pitch is the same hue, dimmer and unlit.
+  //
+  // The idle needle sits at --ink-faint rather than --ink-trace. Trace measures
+  // 1.98:1, under the 3:1 floor for non-text UI, and this is the reading at
+  // rest rather than ornament — the same reason the source framework parks an
+  // OFF toggle thumb at faint too.
   const needleClasses = isInTune
     ? "bg-fill-bright box-glow"
     : showActiveIndicator
       ? "bg-ink-dim"
-      : "bg-ink-trace"
+      : "bg-ink-faint"
 
   const needleOffset = showActiveIndicator
     ? 50 + Math.min(Math.max(cents * 1.1, -50), 50)
@@ -29,11 +34,13 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected }: TuningI
         {/* Centre rule — the target the needle is read against. */}
         <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-stroke-dim" />
 
-        {/* The ±10 cent zone. Lit only once the note is actually inside it. */}
+        {/* The ±10 cent zone. Lit only once the note is actually inside it —
+            but legible before that, because while you are still approaching it
+            this is the target you are aiming the needle at. */}
         <div
           className={cn(
             "absolute inset-y-0 left-[40%] w-[20%] border-x-2",
-            isInTune ? "border-fill bg-fill/12" : "border-ink-trace",
+            isInTune ? "border-fill bg-fill/12" : "border-ink-faint",
           )}
         />
 

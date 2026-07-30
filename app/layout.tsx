@@ -75,14 +75,16 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${vt323.variable} ${silkscreen.variable}`}>
       <body>
-        {/* The frame the screen simulations are painted onto. The mesh and the
-            retrace band need their own nodes: an element has one ::before and
-            one ::after, and both are already spoken for by the plasma bleed and
-            the scanlines. */}
-        <div className="ac-screen">
-          <span className="ac-mesh" aria-hidden="true" />
-          <span className="ac-retrace" aria-hidden="true" />
-          {children}
+        <div className="ac-screen">{children}</div>
+        {/* The glass, a sibling of the frame rather than a child of it: Radix
+            portals mount to <body>, so an overlay nested inside the frame would
+            stop at the edge of every dropdown and dialog. Each layer needs its
+            own node because one element has only a single ::after. */}
+        <div className="ac-glass" aria-hidden="true">
+          <span className="ac-bloom" />
+          <span className="ac-retrace" />
+          <span className="ac-mesh" />
+          <span className="ac-scanlines" />
         </div>
       </body>
     </html>

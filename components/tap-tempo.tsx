@@ -5,6 +5,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Metronome } from "@/components/metronome"
 import { cn } from "@/lib/utils"
 
+// Anything that owns its own Enter/Space activation. Module scope: it is frozen
+// config, and inside the component it would be rebuilt every render and read by
+// an effect that does not list it as a dependency.
+const INTERACTIVE = "button, [role='button'], [role='tab'], a[href], input, select, textarea"
+
 export default function TapTempo() {
   const [taps, setTaps] = useState<number[]>([])
   const [bpm, setBpm] = useState<number | null>(null)
@@ -59,8 +64,6 @@ export default function TapTempo() {
   // click on whatever control has focus. Letting them through here too meant
   // activating ANY control also logged a tap. Measured on the metronome toggle
   // and the +/− tempo keys, both of which quietly corrupted the average.
-  const INTERACTIVE = "button, [role='button'], [role='tab'], a[href], input, select, textarea"
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isActivationKey = e.key === "Enter" || e.code === "Space"
