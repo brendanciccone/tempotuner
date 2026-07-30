@@ -1,25 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import Image from "next/image"
 import TapTempo from "@/components/tap-tempo"
 import Tuner from "@/components/tuner"
-import { Button } from "@/components/ui/button"
-import { Settings } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 
 type TabId = "tuner" | "tempo"
 const TAB_ORDER: readonly TabId[] = ["tuner", "tempo"] as const
@@ -27,7 +11,6 @@ const TAB_ORDER: readonly TabId[] = ["tuner", "tempo"] as const
 export default function ClientApp() {
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>("tuner")
-  const [selectedStyle, setSelectedStyle] = useState("default")
   const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
     tuner: null,
     tempo: null,
@@ -69,75 +52,43 @@ export default function ClientApp() {
     setMounted(true)
   }, [])
 
-  // Apply the selected style to the root element
-  useEffect(() => {
-    document.documentElement.setAttribute('data-style', selectedStyle)
-  }, [selectedStyle])
-
   // Return null on server to prevent hydration issues
   if (!mounted) {
     return null
   }
 
+  // Soft keys stay Title Case — casing is semantic, and these are operator
+  // controls rather than the machine talking.
+  const tabClasses = (tab: TabId) =>
+    cn(
+      "flex-1 border-2 rounded-lg px-6 pt-2 pb-5 text-xl cursor-pointer",
+      "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
+      activeTab === tab
+        ? "bg-fill text-on-fill border-fill box-glow"
+        : "bg-transparent text-ink border-ink text-glow hover:text-ink-bright hover:border-ink-bright",
+    )
+
   return (
-    <main className={`flex min-h-screen flex-col bg-background p-4 sm:p-6`}>
+    <main className="flex flex-1 flex-col p-5 sm:p-6">
       <div className="w-full max-w-[340px] sm:max-w-sm md:max-w-md mx-auto">
-        <div className="flex justify-between items-center mb-4 sm:mb-6">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/android-chrome-192x192.png"
-              alt="TempoTuner logo"
-              width={32}
-              height={32}
-              className="rounded-[5px] border border-border shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
-            />
-            <h1 className="text-2xl sm:text-3xl font-medium tracking-[-0.04em]">TempoTuner</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground"></p>
+        <header className="mb-4 sm:mb-6">
+          <div className="flex items-baseline justify-between gap-3 border-b-2 border-stroke-dim pb-2">
+            <h1 className="flex items-center gap-2 text-xl sm:text-2xl tracking-display text-ink-bright text-glow">
+              {/* Ornament is typographic. Sized down from the heading so the
+                  half-block reads as a bar and not as a dropped capital. */}
+              <span aria-hidden="true" className="text-base leading-none">
+                ▌
+              </span>
+              TempoTuner
+            </h1>
+            <p className="font-micro text-micro tracking-micro text-ink-faint uppercase">
+              Pitch / Tempo Console
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="icon" className="rounded-full">
-                  <Settings className="h-5 w-5" />
-                  <span className="sr-only">Settings</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Settings</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-2">
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Style</h4>
-                    <Select value={selectedStyle} onValueChange={setSelectedStyle}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select style" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Default</SelectItem>
-                        <SelectItem value="neon">Neon</SelectItem>
-                        <SelectItem value="cyberpunk">Cyberpunk</SelectItem>
-                        <SelectItem value="soft">Soft</SelectItem>
-                        <SelectItem value="classic">Classic</SelectItem>
-                        <SelectItem value="arcade">Arcade</SelectItem>
-                        <SelectItem value="nature">Nature</SelectItem>
-                        <SelectItem value="minimalist">Minimalist</SelectItem>
-                        <SelectItem value="typewriter">Typewriter</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
+        </header>
 
         {/* Tab Buttons */}
-        <div
-          role="tablist"
-          aria-label="Tool selection"
-          className="flex w-full mb-4 border border-border rounded-lg overflow-hidden"
-        >
+        <div role="tablist" aria-label="Tool selection" className="flex w-full gap-2 mb-4">
           <button
             ref={(el) => {
               tabRefs.current.tuner = el
@@ -149,11 +100,7 @@ export default function ClientApp() {
             tabIndex={activeTab === "tuner" ? 0 : -1}
             onClick={() => setActiveTab("tuner")}
             onKeyDown={(e) => handleTabKeyDown(e, "tuner")}
-            className={`flex-1 py-2 text-center font-medium text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              activeTab === "tuner"
-                ? "bg-primary text-primary-foreground font-semibold"
-                : "bg-card text-foreground hover:bg-muted/50"
-            }`}
+            className={tabClasses("tuner")}
           >
             Tuner
           </button>
@@ -168,11 +115,7 @@ export default function ClientApp() {
             tabIndex={activeTab === "tempo" ? 0 : -1}
             onClick={() => setActiveTab("tempo")}
             onKeyDown={(e) => handleTabKeyDown(e, "tempo")}
-            className={`flex-1 py-2 text-center font-medium text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              activeTab === "tempo"
-                ? "bg-primary text-primary-foreground font-semibold"
-                : "bg-card text-foreground hover:bg-muted/50"
-            }`}
+            className={tabClasses("tempo")}
           >
             Tempo
           </button>
@@ -199,4 +142,3 @@ export default function ClientApp() {
     </main>
   )
 }
-

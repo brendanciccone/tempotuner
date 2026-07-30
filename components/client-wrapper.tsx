@@ -14,7 +14,14 @@ export default function ClientWrapper({ children }: ClientWrapperProps) {
   }, [])
 
   if (!isMounted) {
-    return <div className="min-h-[400px] w-full bg-card/50 animate-pulse rounded-lg" />
+    return (
+      <div className="flex min-h-[400px] w-full items-center justify-center text-base uppercase tracking-body text-ink-dim">
+        Initialising
+        <span className="blink" aria-hidden="true">
+          █
+        </span>
+      </div>
+    )
   }
 
   return <>{children}</>

@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Mic, RotateCcw } from "lucide-react"
 import { useTuner } from "@/hooks/use-tuner"
 import { NoteDisplay } from "@/components/tuner/note-display"
 import { TuningIndicator } from "@/components/tuner/tuning-indicator"
@@ -30,7 +29,11 @@ export default function Tuner() {
   }
 
   return (
-    <Card className="shadow-lg border border-border w-full overflow-hidden bg-card/50 backdrop-blur-sm">
+    <Card className="w-full overflow-hidden pt-0">
+      {/* Full-width inverse strip — the machine's own heading for the region. */}
+      <div className="bg-fill text-on-fill text-center py-1 px-4 uppercase tracking-display">
+        Chromatic Tuner
+      </div>
       <CardContent className="p-4 sm:p-6">
         <div className="flex flex-col items-center w-full">
           <NoteDisplay
@@ -52,26 +55,24 @@ export default function Tuner() {
           {/* Initialising prompt — shown while the mic permission request is in flight. */}
           {state.isInitializing && !state.error && !state.needsUserGesture && (
             <div
-              className="w-full mb-4 text-xs text-muted-foreground text-center"
+              className="w-full mb-4 text-sm text-ink-dim text-center uppercase tracking-body"
               role="status"
               aria-live="polite"
             >
-              Requesting microphone access…
+              Requesting microphone access
+              <span className="blink" aria-hidden="true">
+                █
+              </span>
             </div>
           )}
 
           {/* Tap-to-start prompt for iOS Safari (AudioContext requires user gesture). */}
           {state.needsUserGesture && !state.error && (
             <div className="w-full mb-4 flex flex-col items-center gap-2">
-              <Button
-                onClick={handleStartWithGesture}
-                className="gap-2"
-                aria-label="Start tuner"
-              >
-                <Mic className="h-4 w-4" />
-                Tap to start tuner
+              <Button onClick={handleStartWithGesture} aria-label="Start tuner">
+                <span aria-hidden="true">✳</span> Tap to start tuner
               </Button>
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="text-sm text-ink-dim text-center uppercase tracking-body">
                 Your browser needs a tap to enable the microphone.
               </p>
             </div>
@@ -87,24 +88,21 @@ export default function Tuner() {
             onResetReferenceFreq={actions.resetReferenceFreq}
           />
 
+          {/* Law 1: a fault is inverse video plus blink, never a red box. */}
           {state.error && (
             <div
               role="alert"
               aria-live="assertive"
-              className="mt-6 w-full flex flex-col items-center gap-2"
+              className="mt-6 w-full flex flex-col items-center gap-3"
             >
-              <div className="text-sm text-error-high-contrast text-center">
-                {state.error}
+              <div className="w-full bg-fill-bright text-on-fill px-3 py-1 text-sm uppercase tracking-body text-center">
+                <span className="blink" aria-hidden="true">
+                  ✳✳{" "}
+                </span>
+                Fault: {state.error}
               </div>
-              <Button
-                onClick={handleRetry}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                aria-label="Retry microphone access"
-              >
-                <RotateCcw className="h-3 w-3" />
-                Try again
+              <Button onClick={handleRetry} variant="outline" aria-label="Retry microphone access">
+                <span aria-hidden="true">↺</span> Try again
               </Button>
             </div>
           )}

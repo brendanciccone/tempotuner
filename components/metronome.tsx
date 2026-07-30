@@ -5,7 +5,6 @@ import * as React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
-import { Volume2, VolumeX, Minus, Plus, ChevronDown, ChevronUp, Check } from "lucide-react"
 import { Select, SelectContent, SelectGroup, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { cn } from "@/lib/utils"
@@ -16,7 +15,7 @@ interface MetronomeProps {
   onStateChange?: (isPlaying: boolean, currentBeat: number) => void
 }
 
-// Custom SelectItem with checkmark on the right
+// Custom SelectItem with the selection marker on the right
 const CustomSelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
@@ -24,15 +23,16 @@ const CustomSelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center justify-between rounded-sm py-1.5 px-3 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-pointer select-none items-center justify-between rounded-sm py-1.5 pl-3 pr-8 text-base uppercase tracking-body outline-none",
+      "focus:bg-fill focus:text-on-fill data-[disabled]:pointer-events-none data-[disabled]:text-ink-faint",
       className,
     )}
     {...props}
   >
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
-    <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
+    <span className="absolute right-2 flex w-4 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
+        <span aria-hidden="true">◂</span>
       </SelectPrimitive.ItemIndicator>
     </span>
   </SelectPrimitive.Item>
@@ -450,54 +450,46 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
 
   return (
     <div className="w-full">
-      <div className="bg-background/10 backdrop-blur-sm rounded-xl p-4 border border-border shadow-sm">
+      <div className="relative rounded-lg border-2 border-stroke px-4 pt-6 pb-4">
+        {/* Legend chip breaking the top rule — the panel names itself. */}
+        <div className="absolute -top-[10px] left-3 px-2 bg-screen-raised text-sm uppercase tracking-display text-ink text-glow leading-none">
+          Metronome
+        </div>
         <div className="flex flex-col gap-4">
           {/* Top Row - Metronome On/Off Button and Time Signature */}
           <div className="flex items-center justify-between gap-3">
             <Button
               onClick={toggleMetronome}
               variant={isPlaying ? "default" : "outline"}
-              className={`h-10 flex-1 transition-all duration-200 ${
-                isPlaying
-                  ? "bg-primary hover:bg-primary/90"
-                  : "border-input hover:bg-accent hover:text-accent-foreground"
-              }`}
+              aria-pressed={isPlaying}
+              className="flex-1"
             >
-              {isPlaying ? (
-                <>
-                  <Volume2 className="h-4 w-4 mr-2" />
-                  <span>Metronome</span>
-                </>
-              ) : (
-                <>
-                  <VolumeX className="h-4 w-4 mr-2" />
-                  <span>Metronome</span>
-                </>
-              )}
+              {/* The state word is mandatory: on a monochrome panel a lit
+                  surface alone is ambiguous. */}
+              <span aria-hidden="true">{isPlaying ? "▶" : "■"}</span>
+              <span>{isPlaying ? "Running" : "Stopped"}</span>
               <span className="sr-only">{isPlaying ? "Turn off" : "Turn on"} metronome</span>
             </Button>
 
             <Select value={timeSignature} onValueChange={setTimeSignature}>
-              <SelectTrigger className="w-20 h-10 bg-background/50 border-input text-center">
-                <SelectValue placeholder="4/4" className="text-center" />
+              <SelectTrigger className="w-24 shrink-0" aria-label="Time signature">
+                <SelectValue placeholder="4/4" />
               </SelectTrigger>
-              <SelectContent className="min-w-[120px]">
+              <SelectContent className="min-w-[140px]">
                 <SelectGroup>
-                  <SelectLabel className="px-3 py-1 text-xs font-semibold text-muted-foreground">Common</SelectLabel>
+                  <SelectLabel>Common</SelectLabel>
                   <CustomSelectItem value="2/4">2/4</CustomSelectItem>
                   <CustomSelectItem value="3/4">3/4</CustomSelectItem>
                   <CustomSelectItem value="4/4">4/4</CustomSelectItem>
                 </SelectGroup>
                 <SelectGroup>
-                  <SelectLabel className="px-3 py-1 text-xs font-semibold text-muted-foreground">Compound</SelectLabel>
+                  <SelectLabel>Compound</SelectLabel>
                   <CustomSelectItem value="6/8">6/8</CustomSelectItem>
                   <CustomSelectItem value="9/8">9/8</CustomSelectItem>
                   <CustomSelectItem value="12/8">12/8</CustomSelectItem>
                 </SelectGroup>
                 <SelectGroup>
-                  <SelectLabel className="px-3 py-1 text-xs font-semibold text-muted-foreground">
-                    Other
-                  </SelectLabel>
+                  <SelectLabel>Other</SelectLabel>
                   <CustomSelectItem value="5/4">5/4</CustomSelectItem>
                   <CustomSelectItem value="7/8">7/8</CustomSelectItem>
                 </SelectGroup>
@@ -511,9 +503,9 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
               variant="outline"
               size="icon"
               onClick={() => adjustBpm(-1)}
-              className="h-10 w-10 rounded-md flex-shrink-0 border border-input bg-background"
+              className="shrink-0 rounded-sm"
             >
-              <Minus className="h-4 w-4" />
+              <span aria-hidden="true">−</span>
               <span className="sr-only">Decrease tempo</span>
             </Button>
 
@@ -524,7 +516,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
                 max={240}
                 step={1}
                 onValueChange={handleBpmChange}
-                className="cursor-pointer"
+                aria-label="Tempo in beats per minute"
               />
             </div>
 
@@ -532,60 +524,64 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
               variant="outline"
               size="icon"
               onClick={() => adjustBpm(1)}
-              className="h-10 w-10 rounded-md flex-shrink-0 border border-input bg-background"
+              className="shrink-0 rounded-sm"
             >
-              <Plus className="h-4 w-4" />
+              <span aria-hidden="true">+</span>
               <span className="sr-only">Increase tempo</span>
             </Button>
+          </div>
+
+          {/* The scale under the bargraph, in the micro face. */}
+          <div className="flex justify-between font-micro text-micro tracking-micro text-ink-faint -mt-2">
+            <span>40</span>
+            <span>{bpm} BPM</span>
+            <span>240</span>
           </div>
         </div>
       </div>
 
-      {/* Note Calculations Section as an FAQ-style expandable card */}
-      <div className="mt-4 overflow-hidden rounded-lg border border-input bg-card shadow-sm">
-        <div
+      {/* Note Calculations Section as an expandable region */}
+      <div className="mt-4 overflow-hidden rounded-lg border-2 border-stroke-dim">
+        <button
+          type="button"
           onClick={() => setIsNotesExpanded(!isNotesExpanded)}
-          className="flex cursor-pointer items-center justify-between px-4 py-3 bg-background hover:bg-accent/50 transition-colors"
+          aria-expanded={isNotesExpanded}
+          aria-controls="delay-reverb-table"
+          className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left uppercase tracking-body text-ink hover:text-ink-bright focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:-outline-offset-[3px]"
         >
-          <h3 className="text-sm font-medium">Delay & Reverb Calculator</h3>
-          <button
-            type="button"
-            className="ml-2 h-5 w-5 rounded-full flex items-center justify-center text-muted-foreground"
-            aria-expanded={isNotesExpanded}
-          >
-            {isNotesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            <span className="sr-only">{isNotesExpanded ? "Close" : "Open"} delay & reverb calculator</span>
-          </button>
-        </div>
+          <h3 className="text-base tracking-body">Delay & Reverb Calculator</h3>
+          <span aria-hidden="true">{isNotesExpanded ? "▲" : "▼"}</span>
+          <span className="sr-only">{isNotesExpanded ? "Close" : "Open"} delay & reverb calculator</span>
+        </button>
 
-        <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            isNotesExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
-          }`}
-        >
-          <div className="p-4 bg-background">
+        <div id="delay-reverb-table" hidden={!isNotesExpanded}>
+          <div className="px-4 pb-4">
             <table className="w-full border-collapse">
               <thead>
+                {/* Inverse video: the header is the machine labelling its own
+                    output. */}
                 <tr>
-                  <th className="text-left text-xs uppercase tracking-wider font-medium text-muted-foreground pb-2 w-1/2">
+                  <th className="bg-fill text-on-fill text-left text-sm uppercase tracking-body px-2 py-1 w-1/2">
                     Note
                   </th>
-                  <th className="text-left text-xs uppercase tracking-wider font-medium text-muted-foreground pb-2 w-1/2">
+                  <th className="bg-fill text-on-fill text-left text-sm uppercase tracking-body px-2 py-1 w-1/2">
                     Duration
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {noteDurations.map((note, index) => (
-                  <tr key={index} className="border-t border-border first:border-0">
-                    <td className="py-2">{note.name}</td>
-                    <td className="py-2 tabular-nums">{note.duration} ms</td>
+                  <tr key={index} className="border-b-2 border-stroke-dim">
+                    <td className="px-2 py-1 text-sm uppercase tracking-body">{note.name}</td>
+                    <td className="px-2 py-1 text-sm tabular-nums text-ink-bright">
+                      {note.duration} ms
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Delay and reverb times are calculated based on the current tempo ({displayBpm} BPM). A quarter note at this tempo
+            <p className="mt-4 text-sm uppercase tracking-body text-ink-dim">
+              Delay and reverb times are calculated from the current tempo ({displayBpm} BPM). A quarter note at this tempo
               equals {Math.round(60000 / displayBpm)} milliseconds.
               {displayBpm > 240 && " Metronome playback is limited to 240 BPM, but delay calculations remain accurate at any tempo."}
             </p>

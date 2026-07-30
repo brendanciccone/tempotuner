@@ -4,23 +4,35 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// The soft key. No transitions anywhere below: a redrawn screen has no
+// in-between frames, so press snaps straight to inverse video.
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  cn(
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border-2 uppercase tracking-body cursor-pointer",
+    "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
+    "disabled:pointer-events-none disabled:text-ink-faint disabled:border-stroke-dim disabled:bg-transparent disabled:text-glow-none disabled:shadow-none",
+  ),
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        // Inverse video. Ration it: two or three filled surfaces per screen.
+        default: "border-fill bg-fill text-on-fill box-glow hover:bg-fill-bright hover:border-fill-bright",
+        // The alarm key — the loudest thing the panel has.
+        destructive: "border-fill-bright bg-fill-bright text-on-fill box-glow",
+        outline:
+          "border-stroke bg-transparent text-ink text-glow hover:text-ink-bright hover:border-ink-bright hover:box-glow active:bg-fill active:text-on-fill active:text-glow-none",
+        // Dim never glows — glow is the signal of energization.
+        secondary: "border-stroke-dim bg-transparent text-ink-faint",
+        ghost:
+          "border-transparent bg-transparent text-ink hover:text-ink-bright active:bg-fill active:text-on-fill",
+        link: "border-transparent text-ink-bright underline underline-offset-[3px]",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
+        // 44px is the hit-target floor and this panel is touched with a finger.
+        default: "h-11 px-6 text-base",
+        sm: "h-11 px-4 text-sm rounded-sm",
+        lg: "h-14 px-7 text-xl",
+        icon: "h-11 w-11 text-base",
       },
     },
     defaultVariants: {
@@ -45,4 +57,3 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button"
 
 export { Button, buttonVariants }
-

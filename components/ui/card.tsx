@@ -8,10 +8,8 @@ const Card = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
-      className
-    )}
+    // The framed region. Borders do the layout work; there is no elevation.
+    className={cn("rounded-lg border-2 border-stroke bg-card text-card-foreground", className)}
     {...props}
   />
 ))
@@ -35,10 +33,7 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
-      className
-    )}
+    className={cn("text-2xl uppercase tracking-display leading-none", className)}
     {...props}
   />
 ))
@@ -50,7 +45,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-sm text-ink-dim uppercase tracking-body", className)}
     {...props}
   />
 ))
