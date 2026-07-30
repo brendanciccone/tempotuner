@@ -4,7 +4,6 @@ interface TuningIndicatorProps {
   cents: number
   tuningStatus: "flat" | "sharp" | "in-tune" | null
   signalDetected: boolean
-  isNoteLocked: boolean // Add isNoteLocked prop
 }
 
 export function TuningIndicator({ cents, tuningStatus, signalDetected }: TuningIndicatorProps) {
@@ -40,10 +39,15 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected }: TuningI
 
         {/* Indicator needle. The step is instant — a redrawn screen has no
             in-between frames — but the travel is eased so the reading stays
-            readable while the pitch moves. */}
+            readable while the pitch moves. Only `left` is inline, because only
+            `left` is dynamic; keeping the transition in classes leaves it
+            subject to the reduced-motion rules. */}
         <div
-          className={cn("absolute inset-y-2 w-1 -translate-x-1/2", needleClasses)}
-          style={{ left: `${needleOffset}%`, transition: "left 150ms cubic-bezier(0.4, 0, 0.2, 1)" }}
+          className={cn(
+            "absolute inset-y-2 w-1 -translate-x-1/2 transition-[left] duration-150 ease-in-out motion-reduce:transition-none",
+            needleClasses,
+          )}
+          style={{ left: `${needleOffset}%` }}
         />
 
         {/* Scale marks, in the micro face — bit labels, not body text. */}

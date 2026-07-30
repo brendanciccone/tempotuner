@@ -4,9 +4,12 @@
    Green Console — the only theme.
 
    Structure, type scale, 4px cell grid, glow tokens and screen simulations are
-   adapted from Amber Console by Diederik (BSD-3-Clause), the look of a
-   late-1980s industrial control panel:
-   https://github.com/DutchDiederik/AmberConsole
+   adapted from Amber Console by Diederik, the look of a late-1980s industrial
+   control panel: https://github.com/DutchDiederik/AmberConsole
+
+   Copyright (c) 2026, Diederik - https://diederik.blog. Licensed BSD-3-Clause;
+   the full notice, conditions and disclaimer are retained verbatim in
+   LICENSES/amber-console.BSD-3-Clause.txt.
 
    The gas is swapped. Amber Console ships two palettes and switches between
    them with `data-ac-gas` precisely because a panel is one piece of hardware:

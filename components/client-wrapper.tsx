@@ -15,7 +15,11 @@ export default function ClientWrapper({ children }: ClientWrapperProps) {
 
   if (!isMounted) {
     return (
-      <div className="flex min-h-[400px] w-full items-center justify-center text-base uppercase tracking-body text-ink-dim">
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex min-h-[400px] w-full items-center justify-center text-base uppercase tracking-body text-ink-dim"
+      >
         Initialising
         <span className="blink" aria-hidden="true">
           █

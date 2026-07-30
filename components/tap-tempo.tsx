@@ -110,7 +110,14 @@ export default function TapTempo() {
             </div>
           </div>
 
-          {/* The gloved-finger touch pad: a box, with the label parked top-left. */}
+          {/* The gloved-finger touch pad: a box, with the label parked top-left.
+              Deliberately a div with role="button" and NO onKeyDown of its own.
+              The window listener above already taps on every key, so a local
+              handler counted an Enter twice — two taps a zero interval apart,
+              which halved the average and read 346 BPM for a 120 BPM input. A
+              native <button> does not fix this either: it synthesises a click
+              from Enter/Space, so onClick would fire alongside the same window
+              listener. Keyboard activation belongs to that listener alone. */}
           <div
             className={cn(
               "w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-xl uppercase tracking-display cursor-pointer select-none",
@@ -123,12 +130,6 @@ export default function TapTempo() {
             role="button"
             tabIndex={0}
             aria-label="Tap to set tempo"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                handleTap()
-              }
-            }}
           >
             <span className="pointer-events-none">Tap</span>
           </div>

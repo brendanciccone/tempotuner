@@ -77,12 +77,14 @@ tests/        → Unit, integration, and security tests
 
 ### Test Types
 
-- **Unit** (`tests/unit/`) — 62 tests covering audio processing, note detection, tuner initialization, the theme regression guards (single theme, no `data-style` variants, no light/dark pair, no second hue in the UI, the 18px bitmap floor, and the contrast gates: each stop against `--screen`, AA on all three surfaces, inverse-video legibility, ramp monotonicity), and the `useTuner` hook orchestration (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, the cleanup→re-initialize retry path, a regression guard that `cleanup()` awaits `AudioContext.close()`, and the iOS Safari `needs-gesture` → `startWithGesture` flow)
+- **Unit** (`tests/unit/`) — 66 tests covering audio processing, note detection, tuner initialization, tap-tempo input (one tap per key press, per pointer press, and the two-second reset), the theme regression guards (single theme, no `data-style` variants, no light/dark pair, no second hue in the UI, the 18px bitmap floor, and the contrast gates: each stop against `--screen`, AA on all three surfaces, inverse-video legibility, ramp monotonicity), and the `useTuner` hook orchestration (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, the cleanup→re-initialize retry path, a regression guard that `cleanup()` awaits `AudioContext.close()`, and the iOS Safari `needs-gesture` → `startWithGesture` flow)
 
 ## Recent Additions
 
 ### July 2026
 
+- Fixed a tap-tempo bug that predates the retheme: the pad carried its own `onKeyDown` while a window-level listener was already tapping on every key, so activating the focused pad with Enter counted twice and roughly tripled the reading (346 BPM measured for a 120 BPM input). Keyboard activation now belongs to the window listener alone
+- Fixed `SelectLabel` rendering at 22px instead of 10px: `tailwind-merge` has no knowledge of custom `@theme` tokens, so it classified `text-micro` as a colour utility and dropped it. `cn()` now registers the token in the font-size group
 - Swapped the panel's gas from amber to a P1-style phosphor green (the Pip-Boy ramp). The whole tube changes, not one element — a spot green for "in tune" beside an amber panel would read as a rendering fault rather than a signal, and would break the one rule the design is emphatic about. The five stops are re-solved at hue 140° rather than re-tinted, and the ramp sits higher than amber's because green has the luminance headroom amber lacks. A side effect worth having: the dim stop moves from 3.42:1 to 4.85:1, which clears WCAG AA for the sub-18px micro labels that previously failed it. New contrast tests enforce the gates
 - Retheme: every style variant is gone (`default`, `neon`, `cyberpunk`, `soft`, `classic`, `arcade`, `nature`, `minimalist`, `typewriter`) and so is the light/dark pair, replaced by a single [Amber Console](https://github.com/DutchDiederik/AmberConsole) panel. `app/globals.css` is rewritten around the amber ramp, VT323/Silkscreen and the CRT/plasma overlays; the Settings dialog and its style picker are removed with the themes they switched; icons give way to typographic ornament; and `next-themes` and `sonner` (its only remaining consumer) are dropped from `package.json`. Tuning state now reads through brightness and inverse video rather than red/green, and `tests/unit/theme.test.ts` guards all of it
 - Resolved two high-severity Dependabot alerts: raised the `postcss` override to `^8.5.24` (GHSA-r28c-9q8g-f849 — a `sourceMappingURL` path traversal that let untrusted CSS disclose arbitrary `.map` file contents, patched in 8.5.18) and added a `sharp@^0.35.3` override (GHSA-f88m-g3jw-g9cj — libvips CVE-2026-33327/33328/35590/35591, patched in 0.35.0). Both arrive transitively — `postcss` via `next` and `autoprefixer`, `sharp` via `wrangler` → `miniflare` and `next` — and both dependents pin versions that need an override to lift. `pnpm audit` is clean again
@@ -113,4 +115,8 @@ tests/        → Unit, integration, and security tests
 
 ## License
 
-MIT
+MIT.
+
+### Third-party notices
+
+The theme adapts [Amber Console](https://github.com/DutchDiederik/AmberConsole) — Copyright (c) 2026, Diederik — under the BSD 3-Clause License. The full notice, conditions and disclaimer are retained in [`LICENSES/amber-console.BSD-3-Clause.txt`](LICENSES/amber-console.BSD-3-Clause.txt), as clause 1 requires.

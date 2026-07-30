@@ -542,17 +542,23 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
 
       {/* Note Calculations Section as an expandable region */}
       <div className="mt-4 overflow-hidden rounded-lg border-2 border-stroke-dim">
-        <button
-          type="button"
-          onClick={() => setIsNotesExpanded(!isNotesExpanded)}
-          aria-expanded={isNotesExpanded}
-          aria-controls="delay-reverb-table"
-          className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left uppercase tracking-body text-ink hover:text-ink-bright focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:-outline-offset-[3px]"
-        >
-          <h3 className="text-base tracking-body">Delay & Reverb Calculator</h3>
-          <span aria-hidden="true">{isNotesExpanded ? "▲" : "▼"}</span>
-          <span className="sr-only">{isNotesExpanded ? "Close" : "Open"} delay & reverb calculator</span>
-        </button>
+        {/* The heading wraps the trigger rather than sitting inside it: <button>
+            only accepts phrasing content, so a nested <h3> is invalid markup and
+            loses its heading semantics in the a11y tree. aria-expanded already
+            announces open/closed, so the old sr-only duplicate is gone — it only
+            padded the button's accessible name. */}
+        <h3>
+          <button
+            type="button"
+            onClick={() => setIsNotesExpanded(!isNotesExpanded)}
+            aria-expanded={isNotesExpanded}
+            aria-controls="delay-reverb-table"
+            className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left text-base uppercase tracking-body text-ink hover:text-ink-bright focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:-outline-offset-[3px]"
+          >
+            <span>Delay & Reverb Calculator</span>
+            <span aria-hidden="true">{isNotesExpanded ? "▲" : "▼"}</span>
+          </button>
+        </h3>
 
         <div id="delay-reverb-table" hidden={!isNotesExpanded}>
           <div className="px-4 pb-4">

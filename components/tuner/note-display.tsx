@@ -6,7 +6,6 @@ interface NoteDisplayProps {
   signalDetected: boolean
   tuningStatus: "flat" | "sharp" | "in-tune" | null
   cents: number
-  isNoteLocked: boolean
 }
 
 export function NoteDisplay({ note, frequency, signalDetected, tuningStatus, cents }: NoteDisplayProps) {

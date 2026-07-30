@@ -42,14 +42,12 @@ export default function Tuner() {
             signalDetected={state.signalDetected}
             tuningStatus={state.tuningStatus}
             cents={state.cents}
-            isNoteLocked={state.isNoteLocked}
           />
 
           <TuningIndicator
             cents={state.cents}
             tuningStatus={state.tuningStatus}
             signalDetected={state.signalDetected}
-            isNoteLocked={state.isNoteLocked}
           />
 
           {/* Initialising prompt — shown while the mic permission request is in flight. */}
@@ -69,7 +67,9 @@ export default function Tuner() {
           {/* Tap-to-start prompt for iOS Safari (AudioContext requires user gesture). */}
           {state.needsUserGesture && !state.error && (
             <div className="w-full mb-4 flex flex-col items-center gap-2">
-              <Button onClick={handleStartWithGesture} aria-label="Start tuner">
+              {/* No aria-label: it would shadow the visible text and leave
+                  speech-input users unable to say what they can see. */}
+              <Button onClick={handleStartWithGesture}>
                 <span aria-hidden="true">✳</span> Tap to start tuner
               </Button>
               <p className="text-sm text-ink-dim text-center uppercase tracking-body">
@@ -101,7 +101,12 @@ export default function Tuner() {
                 </span>
                 Fault: {state.error}
               </div>
-              <Button onClick={handleRetry} variant="outline" aria-label="Retry microphone access">
+              {/* A superset of the visible text, so "try again" still matches. */}
+              <Button
+                onClick={handleRetry}
+                variant="outline"
+                aria-label="Try again — retry microphone access"
+              >
                 <span aria-hidden="true">↺</span> Try again
               </Button>
             </div>

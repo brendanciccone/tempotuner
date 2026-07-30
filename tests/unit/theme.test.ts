@@ -51,13 +51,17 @@ describe("single theme", () => {
   })
 
   it("does not depend on next-themes", () => {
-    expect(packageJson).toHaveProperty("dependencies")
-    const { dependencies, devDependencies } = packageJson as {
-      dependencies: Record<string, string>
-      devDependencies: Record<string, string>
+    // Narrow rather than assert: a cast would let an absent devDependencies
+    // block sail through as `undefined` and fail against the wrong thing.
+    expect(packageJson).toBeTypeOf("object")
+    if (typeof packageJson !== "object" || packageJson === null) return
+
+    for (const field of ["dependencies", "devDependencies"] as const) {
+      expect(packageJson, `package.json has no ${field}`).toHaveProperty(field)
+      const block = field in packageJson ? packageJson[field as keyof typeof packageJson] : null
+      expect(block).toBeTypeOf("object")
+      expect(Object.keys(block ?? {})).not.toContain("next-themes")
     }
-    expect(dependencies).not.toHaveProperty("next-themes")
-    expect(devDependencies).not.toHaveProperty("next-themes")
   })
 })
 
@@ -90,8 +94,22 @@ describe("phosphor palette", () => {
     // Tailwind's own `green-*` scale counts as a second hue too: the gas comes
     // from the phosphor tokens, and a text-green-500 would be off-ramp green
     // sitting next to it.
-    expect(filesContaining(/\b(?:text|bg|border)-(?:red|green|emerald|blue|yellow|amber)-\d{2,3}\b/))
-      .toEqual([])
+    //
+    // Every utility that can paint a colour is covered, not just text/bg/border
+    // — ring, stroke, outline, shadow, decoration and the gradient stops all
+    // take a palette value, and so do the unnumbered ones (text-white).
+    const colourUtilities =
+      "text|bg|border|ring|outline|divide|stroke|fill|shadow|accent|caret|decoration|from|via|to"
+    const palette =
+      "slate|gray|grey|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose"
+
+    // Numbered stops: text-red-500, shadow-emerald-500/40, ring-blue-400
+    expect(filesContaining(new RegExp(`\\b(?:${colourUtilities})-(?:${palette})-\\d{2,3}\\b`))).toEqual(
+      [],
+    )
+    // Unnumbered: text-white, bg-black. `border-transparent` and the theme's
+    // own token names are deliberately not in this list.
+    expect(filesContaining(new RegExp(`\\b(?:${colourUtilities})-(?:white|black)\\b`))).toEqual([])
   })
 
   it("maps the shadcn contract onto the ramp so no primitive keeps a default", () => {
@@ -209,12 +227,33 @@ describe("contrast gates", () => {
 describe("terminal type scale", () => {
   it("never drops the terminal face below 18px", () => {
     // VT323 is a bitmap face; under 18px it stops resolving. --text-micro is
-    // the one exception and belongs to Silkscreen.
-    const sizes = [...globalsCss.matchAll(/--text-(?!micro)([a-z0-9]+):\s*(\d+)px;/g)]
+    // the one exception and belongs to Silkscreen, which is sized for it.
+    //
+    // Checking only the declarations that exist would pass on deletion: drop
+    // the --text-xs override and Tailwind's 12px default silently returns while
+    // the assertion still sees nothing wrong. So the key set is asserted first.
+    const required = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl"]
 
-    expect(sizes.length).toBeGreaterThan(0)
-    for (const [, name, px] of sizes) {
-      expect(Number(px), `--text-${name} is below the bitmap floor`).toBeGreaterThanOrEqual(18)
+    const declared = new Map(
+      [...globalsCss.matchAll(/--text-(?!micro)([a-z0-9]+):\s*([^;]+);/g)].map(
+        ([, name, value]) => [name, value.trim()],
+      ),
+    )
+
+    for (const name of required) {
+      expect(declared.has(name), `--text-${name} is not overridden, so Tailwind's default wins`).toBe(
+        true,
+      )
+    }
+
+    for (const [name, value] of declared) {
+      // rem/em would be relative to a root font-size this theme does not pin,
+      // so the floor could not be verified from the stylesheet alone.
+      expect(value, `--text-${name} must be declared in px`).toMatch(/^\d+px$/)
+      expect(
+        Number.parseInt(value, 10),
+        `--text-${name} is below the bitmap floor`,
+      ).toBeGreaterThanOrEqual(18)
     }
   })
 

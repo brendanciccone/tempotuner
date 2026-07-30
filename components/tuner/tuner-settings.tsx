@@ -110,7 +110,13 @@ export function TunerSettings({
                 <span aria-hidden="true">−</span>
                 <span className="sr-only">Decrease reference frequency</span>
               </Button>
-              <div className="px-2 text-sm tabular-nums min-w-[88px] whitespace-nowrap text-center text-ink-bright text-glow">
+              {/* Live, because the −/＋ keys carry static labels: without this
+                  a screen reader hears nothing about the new value. */}
+              <div
+                aria-live="polite"
+                aria-atomic="true"
+                className="px-2 text-sm tabular-nums min-w-[88px] whitespace-nowrap text-center text-ink-bright text-glow"
+              >
                 {referenceFreq.toFixed(1)} Hz
               </div>
               <Button
