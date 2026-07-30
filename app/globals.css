@@ -1,17 +1,24 @@
 @import "tailwindcss";
 
 /* ===========================================================================
-   Amber Console — the only theme.
+   Green Console — the only theme.
 
-   Palette, type scale, 4px cell grid, glow tokens and screen simulations are
+   Structure, type scale, 4px cell grid, glow tokens and screen simulations are
    adapted from Amber Console by Diederik (BSD-3-Clause), the look of a
    late-1980s industrial control panel:
    https://github.com/DutchDiederik/AmberConsole
 
+   The gas is swapped. Amber Console ships two palettes and switches between
+   them with `data-ac-gas` precisely because a panel is one piece of hardware:
+   you change the whole tube, you do not put two gases in it. This panel runs
+   the third one — a P1-style phosphor green, the Pip-Boy ramp — and that is
+   the only departure from the source.
+
    Its six laws are what every component in this app is styled against:
      1. One gas, many intensities — hierarchy is brightness, inverse video and
-        blink. There is no second hue: no red for "flat", no green for "in tune".
-     2. Inverse video is importance — a solid amber block is the machine talking.
+        blink. There is no second hue: no red for "flat", no amber for "sharp".
+     2. Inverse video is importance — a solid discharge block is the machine
+        talking.
      3. Everything is a box — 2px rules do the layout, elevation does not exist.
      4. The character grid rules — spacing snaps to 4px half-cells, leading 1.15.
      5. Casing is semantic — ALL CAPS is system text, Title Case is a soft key.
@@ -19,39 +26,57 @@
    =========================================================================== */
 
 :root {
-  /* Surfaces — warm blacks (the unlit gas panel) */
-  --screen: #100600;
-  --screen-raised: #1b0c02;
-  --screen-well: #060200;
+  /* Surfaces — green-blacks (the unlit phosphor). Solved to the same
+     luminances as the source's warm blacks, at the new hue. */
+  --screen: #000b04;
+  --screen-raised: #001307;
+  --screen-well: #000301;
 
-  /* The discharge scale: ONE hue, five intensities. Each stop is solved to a
-     contrast ratio against --screen, so re-solve rather than re-tint. */
-  --amber-100: #ffa86d; /* hot highlight / focus — 10.57:1 */
-  --amber-90: #ff6b08; /* primary discharge    —  7.02:1 */
-  --amber-70: #dd5800; /* secondary            —  5.22:1 */
-  --amber-50: #ab4500; /* dim / disabled       —  3.42:1 */
-  --amber-30: #5b2500; /* trace / ghost        —  1.63:1, decorative */
-  --on-fill: #1e0c00; /* text on an inverse-video block — 6.64:1 */
+  /* The discharge scale: ONE hue, five intensities, hue 140deg at full
+     saturation throughout.
+
+     THE RAMP SITS HIGHER THAN THE AMBER ONE, AND THAT IS THE POINT. The source
+     caps its stops at 10.57:1 because it has to: no fully-saturated colour at
+     hue 24 can exceed L=0.318, so its top stop can only get brighter by
+     whitening. Green has no such ceiling — a saturated hue-140 emitter reaches
+     L=0.72 — so re-solving green to amber's ratios would dim a gas that can
+     plainly go brighter, and would land nowhere near the Pip-Boy. Every stop is
+     re-solved rather than re-tinted (rotating hue at constant lightness
+     silently moves contrast), and --phosphor-100 lands at 15.00:1, within a
+     tenth of the reference greens #18ff6c (14.82) and #00ff41 (14.65).
+
+     The dim stop is deliberately gated at 4.8:1 rather than the source's 3.42.
+     It is the only stop that carries text below 18px — the micro labels — and
+     3.42 fails WCAG AA for those at every surface. 4.8 clears 4.5 even on
+     --screen-raised, the least favourable of the three. */
+  --phosphor-100: #37ff79; /* hot highlight / focus — 15.00:1 */
+  --phosphor-90: #00e34c; /* primary discharge    — 11.52:1 */
+  --phosphor-70: #00b73d; /* secondary            —  7.47:1 */
+  --phosphor-50: #009130; /* dim / disabled       —  4.85:1 */
+  --phosphor-30: #004d1a; /* trace / ghost        —  1.98:1, decorative */
+  --on-fill: #00250d; /* text on an inverse-video block — 9.52:1 */
 
   /* Bare "r, g, b" triples: every halo is built from the same photons the cell
-     emits, so the glow can never drift off the discharge hue. */
-  --gas-1: 255, 120, 30;
-  --gas-2: 255, 109, 12;
-  --gas-3: 255, 102, 0;
-  --gas-4: 255, 140, 64;
+     emits, so the glow can never drift off the discharge hue. Leave one behind
+     at the old hue and it puts an amber corona around green text — the one
+     place a mismatch is legible side by side. */
+  --gas-1: 30, 255, 103;
+  --gas-2: 12, 255, 92;
+  --gas-3: 0, 255, 85;
+  --gas-4: 64, 255, 123;
 
-  --ink: var(--amber-90);
-  --ink-bright: var(--amber-100);
-  --ink-dim: var(--amber-70);
-  --ink-faint: var(--amber-50);
-  --ink-trace: var(--amber-30);
+  --ink: var(--phosphor-90);
+  --ink-bright: var(--phosphor-100);
+  --ink-dim: var(--phosphor-70);
+  --ink-faint: var(--phosphor-50);
+  --ink-trace: var(--phosphor-30);
 
   /* Inverse video (solid discharge block, dark text) */
-  --fill: var(--amber-90);
-  --fill-bright: var(--amber-100);
+  --fill: var(--phosphor-90);
+  --fill-bright: var(--phosphor-100);
 
-  --stroke: var(--amber-90);
-  --stroke-dim: var(--amber-50);
+  --stroke: var(--phosphor-90);
+  --stroke-dim: var(--phosphor-50);
 
   --glow-text: 0 0 2px rgba(var(--gas-1), 0.6), 0 0 9px rgba(var(--gas-2), 0.26),
     0 0 24px rgba(var(--gas-3), 0.1);
@@ -191,7 +216,7 @@
     color: var(--on-fill);
   }
 
-  /* The shared focus ring — dashed, because a solid amber ring is a fill. */
+  /* The shared focus ring — dashed, because a solid ring reads as a fill. */
   :focus-visible {
     outline: 2px dashed var(--ink-dim);
     outline-offset: 3px;

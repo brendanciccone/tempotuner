@@ -8,7 +8,7 @@ A simple tuner and metronome web app. Uses the Web Audio API to detect pitch in 
 - Tap tempo for calculating BPM
 - Metronome with common, compound and odd time signatures
 - Delay & reverb calculator derived from the current tempo
-- Amber Console theme: a single monochrome amber terminal with CRT scanlines, plasma bloom and cell mesh
+- Green Console theme: a single monochrome phosphor-green terminal with CRT scanlines, bloom and cell mesh
 - Works on mobile and desktop
 
 ## Tech
@@ -17,12 +17,26 @@ Built with Next.js 16, TypeScript, TailwindCSS, and Shadcn/UI components. Audio 
 
 ### Theme
 
-The app ships exactly **one** theme and no light/dark switch — the panel is a piece of hardware, not a colour scheme. Its palette, type scale, 4px cell grid, glow tokens and screen simulations are adapted from [Amber Console](https://github.com/DutchDiederik/AmberConsole) by Diederik (BSD-3-Clause), reimplemented as Tailwind v4 design tokens in `app/globals.css` so every Shadcn primitive inherits it. Type is set in VT323 with Silkscreen for micro labels, both loaded via `next/font`.
+The app ships exactly **one** theme and no light/dark switch — the panel is a piece of hardware, not a colour scheme. Its structure, type scale, 4px cell grid, glow tokens and screen simulations are adapted from [Amber Console](https://github.com/DutchDiederik/AmberConsole) by Diederik (BSD-3-Clause), reimplemented as Tailwind v4 design tokens in `app/globals.css` so every Shadcn primitive inherits it. Type is set in VT323 with Silkscreen for micro labels, both loaded via `next/font`.
+
+The gas is swapped for a P1-style phosphor green — the Pip-Boy ramp — which is the only departure from the source. That is a whole-panel change, not a spot colour: Amber Console ships two palettes and switches between them wholesale for exactly this reason.
+
+The ramp sits higher than the amber one it replaces, and deliberately. Amber caps at 10.57:1 because it must — no fully-saturated colour at hue 24° exceeds L=0.318, so its top stop can only brighten by whitening. Green has no such ceiling, so every stop is re-solved (never re-tinted, which silently moves contrast) and `--phosphor-100` lands at 15.00:1, within a tenth of the reference greens `#18ff6c` and `#00ff41`.
+
+| Stop | Hex | vs `--screen` | Role |
+|---|---|---|---|
+| `--phosphor-100` | `#37ff79` | 15.00:1 | hot highlight / focus |
+| `--phosphor-90` | `#00e34c` | 11.52:1 | primary discharge |
+| `--phosphor-70` | `#00b73d` | 7.47:1 | secondary |
+| `--phosphor-50` | `#009130` | 4.85:1 | dim / disabled |
+| `--phosphor-30` | `#004d1a` | 1.98:1 | trace / ghost (decorative) |
+
+The dim stop is gated at 4.8:1 rather than the source's 3.42:1 because it is the only stop carrying text below 18px — the Silkscreen micro labels — where 3.42 fails WCAG AA on every surface. `tests/unit/theme.test.ts` enforces the gates, AA on all three surfaces, inverse-video legibility, and ramp monotonicity.
 
 Six rules the UI is styled against:
 
-1. **One gas, many intensities** — hierarchy is brightness, inverse video and blink. No red for "flat", no green for "in tune"
-2. **Inverse video is importance** — a solid amber block is the machine talking
+1. **One gas, many intensities** — hierarchy is brightness, inverse video and blink. No red for "flat", no amber for "sharp"
+2. **Inverse video is importance** — a solid discharge block is the machine talking
 3. **Everything is a box** — 2px rules do the layout; elevation does not exist
 4. **The character grid rules** — spacing snaps to 4px half-cells, leading is 1.15
 5. **Casing is semantic** — ALL CAPS is system text, Title Case is a soft key
@@ -63,12 +77,13 @@ tests/        → Unit, integration, and security tests
 
 ### Test Types
 
-- **Unit** (`tests/unit/`) — 55 tests covering audio processing, note detection, tuner initialization, the theme regression guards (single theme, no `data-style` variants, no light/dark pair, no second hue in the UI, the 18px bitmap floor), and the `useTuner` hook orchestration (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, the cleanup→re-initialize retry path, a regression guard that `cleanup()` awaits `AudioContext.close()`, and the iOS Safari `needs-gesture` → `startWithGesture` flow)
+- **Unit** (`tests/unit/`) — 62 tests covering audio processing, note detection, tuner initialization, the theme regression guards (single theme, no `data-style` variants, no light/dark pair, no second hue in the UI, the 18px bitmap floor, and the contrast gates: each stop against `--screen`, AA on all three surfaces, inverse-video legibility, ramp monotonicity), and the `useTuner` hook orchestration (including secure-context detection, mediaDevices feature detection, sample-rate fallback, DOMException-name error mapping, the cleanup→re-initialize retry path, a regression guard that `cleanup()` awaits `AudioContext.close()`, and the iOS Safari `needs-gesture` → `startWithGesture` flow)
 
 ## Recent Additions
 
 ### July 2026
 
+- Swapped the panel's gas from amber to a P1-style phosphor green (the Pip-Boy ramp). The whole tube changes, not one element — a spot green for "in tune" beside an amber panel would read as a rendering fault rather than a signal, and would break the one rule the design is emphatic about. The five stops are re-solved at hue 140° rather than re-tinted, and the ramp sits higher than amber's because green has the luminance headroom amber lacks. A side effect worth having: the dim stop moves from 3.42:1 to 4.85:1, which clears WCAG AA for the sub-18px micro labels that previously failed it. New contrast tests enforce the gates
 - Retheme: every style variant is gone (`default`, `neon`, `cyberpunk`, `soft`, `classic`, `arcade`, `nature`, `minimalist`, `typewriter`) and so is the light/dark pair, replaced by a single [Amber Console](https://github.com/DutchDiederik/AmberConsole) panel. `app/globals.css` is rewritten around the amber ramp, VT323/Silkscreen and the CRT/plasma overlays; the Settings dialog and its style picker are removed with the themes they switched; icons give way to typographic ornament; and `next-themes` and `sonner` (its only remaining consumer) are dropped from `package.json`. Tuning state now reads through brightness and inverse video rather than red/green, and `tests/unit/theme.test.ts` guards all of it
 - Resolved two high-severity Dependabot alerts: raised the `postcss` override to `^8.5.24` (GHSA-r28c-9q8g-f849 — a `sourceMappingURL` path traversal that let untrusted CSS disclose arbitrary `.map` file contents, patched in 8.5.18) and added a `sharp@^0.35.3` override (GHSA-f88m-g3jw-g9cj — libvips CVE-2026-33327/33328/35590/35591, patched in 0.35.0). Both arrive transitively — `postcss` via `next` and `autoprefixer`, `sharp` via `wrangler` → `miniflare` and `next` — and both dependents pin versions that need an override to lift. `pnpm audit` is clean again
 
