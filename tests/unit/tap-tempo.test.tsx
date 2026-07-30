@@ -33,26 +33,53 @@ const pressFourTimes = (fire: () => void) => {
 }
 
 describe("tap tempo keyboard input", () => {
-  it("counts one tap per key press when the pad has focus", () => {
-    // Regression: the pad carried its own onKeyDown while a window-level
-    // listener was already tapping on every key, so one Enter counted twice.
-    // The zero-length interval between the pair halved the average and roughly
-    // doubled the reported tempo (measured 268 BPM for a 120 BPM input).
+  it("ignores activation keys aimed at the pad, since its click already taps", () => {
+    // Regression: the pad handled Enter itself while a window-level listener was
+    // also tapping on every key, so one press counted twice. The zero-length
+    // interval between the pair halved the average and read 346 BPM for a
+    // 120 BPM input. The pad is now a real button, so its keyboard activation
+    // arrives as a click and the window listener must stay out of the way.
     render(<TapTempo />)
     const pad = screen.getByRole("button", { name: /tap to set tempo/i })
     pad.focus()
 
     pressFourTimes(() => fireEvent.keyDown(pad, { key: "Enter", code: "Enter" }))
 
-    expect(getBpm()).toBe("120")
+    expect(getBpm()).toBe("---")
+  })
+
+  it("does not tap when another control is activated by keyboard", () => {
+    // Regression: Enter/Space on ANY focused control also logged a tap, so a
+    // keyboard user nudging the tempo or toggling the metronome silently
+    // corrupted the average (measured 122 BPM from four presses of "+").
+    render(<TapTempo />)
+    const increase = screen.getByRole("button", { name: /increase tempo/i })
+    increase.focus()
+
+    pressFourTimes(() => fireEvent.keyDown(increase, { key: "Enter", code: "Enter" }))
+    pressFourTimes(() => fireEvent.keyDown(increase, { key: " ", code: "Space" }))
+
+    expect(getBpm()).toBe("---")
   })
 
   it("counts one tap per key press from anywhere on the page", () => {
     // Tapping tempo with any key is the intended behaviour and has to survive
-    // the fix above, which removed the pad's own handler.
+    // the two guards above.
     render(<TapTempo />)
 
     pressFourTimes(() => fireEvent.keyDown(document.body, { key: "q", code: "KeyQ" }))
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("still taps on a non-activation key while a control has focus", () => {
+    // The early return is scoped to Enter/Space. Clicking the pad focuses it,
+    // and continuing to tap with a letter key from there must keep working.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+    pad.focus()
+
+    pressFourTimes(() => fireEvent.keyDown(pad, { key: "q", code: "KeyQ" }))
 
     expect(getBpm()).toBe("120")
   })

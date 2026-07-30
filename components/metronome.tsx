@@ -425,6 +425,10 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     onBpmChange(newBpm)
   }
 
+  const handleNotesToggle = () => {
+    setIsNotesExpanded((expanded) => !expanded)
+  }
+
   // Calculate note durations based on current BPM
   const calculateNoteDurations = () => {
     // Base duration for a quarter note in milliseconds
@@ -550,7 +554,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
         <h3>
           <button
             type="button"
-            onClick={() => setIsNotesExpanded(!isNotesExpanded)}
+            onClick={handleNotesToggle}
             aria-expanded={isNotesExpanded}
             aria-controls="delay-reverb-table"
             className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left text-base uppercase tracking-body text-ink hover:text-ink-bright focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:-outline-offset-[3px]"

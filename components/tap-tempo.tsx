@@ -54,9 +54,21 @@ export default function TapTempo() {
     setTimeout(() => setIsAnimating(false), 100)
   }, [taps, calculateBPM])
 
-  // Add keyboard event listener
+  // Tapping tempo with any key, from anywhere on the page, is the intended
+  // behaviour — but Enter and Space are special: the browser turns them into a
+  // click on whatever control has focus. Letting them through here too meant
+  // activating ANY control also logged a tap. Measured on the metronome toggle
+  // and the +/− tempo keys, both of which quietly corrupted the average.
+  const INTERACTIVE = "button, [role='button'], [role='tab'], a[href], input, select, textarea"
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isActivationKey = e.key === "Enter" || e.code === "Space"
+      const target = e.target instanceof Element ? e.target : null
+      // The focused control owns this press — including the tap pad, whose
+      // native click calls handleTap once on its own.
+      if (isActivationKey && target?.closest(INTERACTIVE)) return
+
       // Prevent spacebar from scrolling the page
       if (e.code === "Space") {
         e.preventDefault()
@@ -111,28 +123,25 @@ export default function TapTempo() {
           </div>
 
           {/* The gloved-finger touch pad: a box, with the label parked top-left.
-              Deliberately a div with role="button" and NO onKeyDown of its own.
-              The window listener above already taps on every key, so a local
-              handler counted an Enter twice — two taps a zero interval apart,
-              which halved the average and read 346 BPM for a 120 BPM input. A
-              native <button> does not fix this either: it synthesises a click
-              from Enter/Space, so onClick would fire alongside the same window
-              listener. Keyboard activation belongs to that listener alone. */}
-          <div
+              A real <button>, so focus, activation and disabled semantics are
+              the browser's. Its keyboard activation arrives here as a click —
+              the window listener above deliberately steps aside for it, because
+              handling the keydown too counted one Enter as two taps a zero
+              interval apart and read 346 BPM for a 120 BPM input. */}
+          <button
+            type="button"
             className={cn(
-              "w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-xl uppercase tracking-display cursor-pointer select-none",
+              "w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-left text-xl uppercase tracking-display cursor-pointer select-none",
               isLit
                 ? "bg-fill text-on-fill border-fill box-glow"
                 : "bg-transparent text-ink border-stroke text-glow",
               "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
             )}
             onClick={handleTap}
-            role="button"
-            tabIndex={0}
             aria-label="Tap to set tempo"
           >
             <span className="pointer-events-none">Tap</span>
-          </div>
+          </button>
 
           {/* Metronome Section */}
           <div className="w-full">

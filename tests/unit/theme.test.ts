@@ -29,6 +29,10 @@ const collectSourceFiles = (dir: string): string[] => {
 
 const sourceFiles = SOURCE_DIRS.flatMap((dir) => collectSourceFiles(path.join(repoRoot, dir)))
 
+/** Narrows parsed JSON to something indexable without an `as` assertion. */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null
+
 const filesContaining = (pattern: RegExp): string[] =>
   sourceFiles
     .filter((file) => pattern.test(readFileSync(file, "utf8")))
@@ -51,16 +55,17 @@ describe("single theme", () => {
   })
 
   it("does not depend on next-themes", () => {
-    // Narrow rather than assert: a cast would let an absent devDependencies
-    // block sail through as `undefined` and fail against the wrong thing.
-    expect(packageJson).toBeTypeOf("object")
-    if (typeof packageJson !== "object" || packageJson === null) return
+    // A type guard rather than a cast: an absent devDependencies block would
+    // otherwise sail through as `undefined` and fail against the wrong thing.
+    // `in` narrowing cannot carry this on its own — it only applies to a single
+    // literal key, not the union the loop indexes with.
+    expect(isRecord(packageJson)).toBe(true)
+    if (!isRecord(packageJson)) return
 
     for (const field of ["dependencies", "devDependencies"] as const) {
-      expect(packageJson, `package.json has no ${field}`).toHaveProperty(field)
-      const block = field in packageJson ? packageJson[field as keyof typeof packageJson] : null
-      expect(block).toBeTypeOf("object")
-      expect(Object.keys(block ?? {})).not.toContain("next-themes")
+      const block = packageJson[field]
+      expect(isRecord(block), `package.json has no ${field}`).toBe(true)
+      expect(Object.keys(isRecord(block) ? block : {})).not.toContain("next-themes")
     }
   })
 })
