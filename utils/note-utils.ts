@@ -5,6 +5,17 @@ export const NOTES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A",
 // Default reference frequency for A4
 export const DEFAULT_A4_FREQ = 440.0
 
+/**
+ * Half-width of the in-tune window, in cents. Exported because the tuning
+ * meter has to draw its target zone from the same number the classifier
+ * decides with — when the two drifted apart, the needle could sit inside the
+ * lit zone while the panel read "sharp".
+ */
+export const IN_TUNE_CENTS = 5
+
+/** Cents at the far edges of the meter, so the scale labels stay honest. */
+export const METER_RANGE_CENTS = 50
+
 export interface NoteInfo {
   note: string
   noteName: string
@@ -57,8 +68,8 @@ export const findClosestNote = (frequency: number, referenceFreq: number, useFla
 
   // Determine if the note is flat, sharp, or in tune
   let tuningStatus: "flat" | "sharp" | "in-tune" = "in-tune"
-  if (cents < -5) tuningStatus = "flat"
-  else if (cents > 5) tuningStatus = "sharp"
+  if (cents < -IN_TUNE_CENTS) tuningStatus = "flat"
+  else if (cents > IN_TUNE_CENTS) tuningStatus = "sharp"
 
   return {
     note: `${noteName}${octave}`,

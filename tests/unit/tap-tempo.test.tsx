@@ -33,19 +33,26 @@ const pressFourTimes = (fire: () => void) => {
 }
 
 describe("tap tempo keyboard input", () => {
-  it("ignores activation keys aimed at the pad, since its click already taps", () => {
+  it("counts one tap per keyboard activation of the pad", () => {
     // Regression: the pad handled Enter itself while a window-level listener was
     // also tapping on every key, so one press counted twice. The zero-length
     // interval between the pair halved the average and read 346 BPM for a
-    // 120 BPM input. The pad is now a real button, so its keyboard activation
-    // arrives as a click and the window listener must stay out of the way.
+    // 120 BPM input.
+    //
+    // A real browser turns Enter on a focused button into keydown FOLLOWED BY a
+    // click, and fireEvent.keyDown alone only reproduces the first half — which
+    // would pass whether or not the click path double-counts. Both halves are
+    // dispatched here so the assertion covers the whole activation.
     render(<TapTempo />)
     const pad = screen.getByRole("button", { name: /tap to set tempo/i })
     pad.focus()
 
-    pressFourTimes(() => fireEvent.keyDown(pad, { key: "Enter", code: "Enter" }))
+    pressFourTimes(() => {
+      fireEvent.keyDown(pad, { key: "Enter", code: "Enter" })
+      fireEvent.click(pad)
+    })
 
-    expect(getBpm()).toBe("---")
+    expect(getBpm()).toBe("120")
   })
 
   it("does not tap when another control is activated by keyboard", () => {
