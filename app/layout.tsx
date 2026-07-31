@@ -1,10 +1,23 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import { ThemeProvider } from "@/components/theme-provider"
+import { Silkscreen, VT323 } from "next/font/google"
 import "./globals.css"
 
-const inter = Inter({ subsets: ["latin"] })
+// Both faces are bitmap: VT323 carries everything, Silkscreen is reserved for
+// the micro labels that ride under 12px.
+const vt323 = VT323({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-vt323",
+  display: "swap",
+})
+
+const silkscreen = Silkscreen({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-silkscreen",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tempotuner.fourpixels.workers.dev"),
@@ -51,6 +64,7 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   scrollBehavior: 'auto',
+  themeColor: '#000b04',
 };
 
 export default function RootLayout({
@@ -59,11 +73,19 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.className} suppressHydrationWarning>
+    <html lang="en" className={`${vt323.variable} ${silkscreen.variable}`}>
       <body>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
+        <div className="ac-screen">{children}</div>
+        {/* The glass, a sibling of the frame rather than a child of it: Radix
+            portals mount to <body>, so an overlay nested inside the frame would
+            stop at the edge of every dropdown and dialog. Each layer needs its
+            own node because one element has only a single ::after. */}
+        <div className="ac-glass" aria-hidden="true">
+          <span className="ac-bloom" />
+          <span className="ac-retrace" />
+          <span className="ac-mesh" />
+          <span className="ac-scanlines" />
+        </div>
       </body>
     </html>
   )

@@ -14,10 +14,13 @@ const Slider = React.forwardRef<
     className={cn("relative flex w-full touch-none select-none items-center", className)}
     {...props}
   >
-    <SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-secondary">
-      <SliderPrimitive.Range className="absolute h-full bg-primary" />
+    {/* A bargraph in discrete cells: 8px blocks with 4px gaps, never a smooth
+        bar. A continuous gradient would imply a precision the panel does not
+        have. */}
+    <SliderPrimitive.Track className="relative h-6 w-full grow overflow-hidden rounded-sm border-2 border-stroke-dim bg-screen-well">
+      <SliderPrimitive.Range className="absolute h-full bg-[repeating-linear-gradient(90deg,var(--fill)_0_8px,transparent_8px_12px)] box-glow" />
     </SliderPrimitive.Track>
-    <SliderPrimitive.Thumb className="block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50" />
+    <SliderPrimitive.Thumb className="block h-9 w-1.5 -translate-x-px bg-fill-bright box-glow cursor-pointer focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px] data-[disabled]:pointer-events-none data-[disabled]:bg-ink-faint data-[disabled]:shadow-none" />
   </SliderPrimitive.Root>
 ))
 Slider.displayName = SliderPrimitive.Root.displayName

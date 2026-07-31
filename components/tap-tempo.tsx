@@ -3,6 +3,12 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Metronome } from "@/components/metronome"
+import { cn } from "@/lib/utils"
+
+// Anything that owns its own Enter/Space activation. Module scope: it is frozen
+// config, and inside the component it would be rebuilt every render and read by
+// an effect that does not list it as a dependency.
+const INTERACTIVE = "button, [role='button'], [role='tab'], a[href], input, select, textarea"
 
 export default function TapTempo() {
   const [taps, setTaps] = useState<number[]>([])
@@ -53,9 +59,19 @@ export default function TapTempo() {
     setTimeout(() => setIsAnimating(false), 100)
   }, [taps, calculateBPM])
 
-  // Add keyboard event listener
+  // Tapping tempo with any key, from anywhere on the page, is the intended
+  // behaviour — but Enter and Space are special: the browser turns them into a
+  // click on whatever control has focus. Letting them through here too meant
+  // activating ANY control also logged a tap. Measured on the metronome toggle
+  // and the +/− tempo keys, both of which quietly corrupted the average.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isActivationKey = e.key === "Enter" || e.code === "Space"
+      const target = e.target instanceof Element ? e.target : null
+      // The focused control owns this press — including the tap pad, whose
+      // native click calls handleTap once on its own.
+      if (isActivationKey && target?.closest(INTERACTIVE)) return
+
       // Prevent spacebar from scrolling the page
       if (e.code === "Space") {
         e.preventDefault()
@@ -81,57 +97,57 @@ export default function TapTempo() {
     }
   }
 
-  // Determine if we should show the pulse animation
-  const showPulse = isMetronomePlaying && currentBeat === 1
+  // The downbeat lights the pad, so the pad is the visual metronome too
+  const isDownbeat = isMetronomePlaying && currentBeat === 1
+  const isLit = isAnimating || isDownbeat
 
   return (
-    <Card className="shadow-lg border border-border w-full overflow-hidden bg-card/50 backdrop-blur-sm">
+    <Card className="w-full overflow-hidden pt-0">
+      {/* Full-width inverse strip — the machine's own heading for the region. */}
+      <div className="bg-fill text-on-fill text-center py-1 px-4 uppercase tracking-display">
+        Tap Tempo
+      </div>
       <CardContent className="p-4 sm:p-6">
         <div className="flex flex-col items-center w-full">
-          {/* BPM Display */}
-          <div className="text-center w-full mb-6 sm:mb-8">
+          {/* BPM Readout — the largest thing on the panel and the only bright
+              value in its region. */}
+          <div className="text-center w-full mb-6">
+            <div className="inline-block bg-fill text-on-fill px-3 py-[3px] text-sm uppercase tracking-display">
+              Beats Per Minute
+            </div>
             <div
-              className={`text-6xl sm:text-7xl font-bold tabular-nums select-none tracking-tighter ${bpm === null ? "text-muted-foreground opacity-50" : ""}`}
+              className={cn(
+                "text-6xl sm:text-7xl tabular-nums select-none tracking-display mt-2",
+                bpm === null ? "text-ink-faint text-glow-none" : "text-ink-bright text-glow",
+              )}
             >
               {bpm !== null ? bpm : "---"}
             </div>
-            <div className="text-sm text-muted-foreground mt-1 font-medium">BEATS PER MINUTE</div>
           </div>
 
-          {/* Tap Tempo Section */}
-          <div className="flex flex-col items-center mb-6">
-            <div className="relative">
-              {/* Pulse Animation Ring */}
-              {showPulse && (
-                <div
-                  className="absolute -inset-4 rounded-full bg-primary/10 animate-pulse-ring"
-                  style={{ animationDuration: bpm ? `${60 / bpm}s` : "1s" }}
-                />
-              )}
-
-              {/* Tap Button */}
-              <div
-                className={`w-36 sm:w-40 aspect-square rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-2xl cursor-pointer transition-all select-none user-select-none shadow-lg hover:shadow-xl active:shadow-md ${
-                  isAnimating ? "scale-95" : ""
-                }`}
-                onClick={handleTap}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    handleTap()
-                  }
-                }}
-                style={{ WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none', userSelect: 'none' }}
-              >
-                <span className="pointer-events-none" style={{ WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none', userSelect: 'none' }}>TAP</span>
-              </div>
-            </div>
-          </div>
+          {/* The gloved-finger touch pad: a box, with the label parked top-left.
+              A real <button>, so focus, activation and disabled semantics are
+              the browser's. Its keyboard activation arrives here as a click —
+              the window listener above deliberately steps aside for it, because
+              handling the keydown too counted one Enter as two taps a zero
+              interval apart and read 346 BPM for a 120 BPM input. */}
+          <button
+            type="button"
+            className={cn(
+              "w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-left text-xl uppercase tracking-display cursor-pointer select-none",
+              isLit
+                ? "bg-fill text-on-fill border-fill box-glow"
+                : "bg-transparent text-ink border-stroke text-glow",
+              "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
+            )}
+            onClick={handleTap}
+            aria-label="Tap to set tempo"
+          >
+            <span className="pointer-events-none">Tap</span>
+          </button>
 
           {/* Metronome Section */}
-          <div className="w-full max-w-md mx-auto mt-4">
+          <div className="w-full">
             <Metronome
               initialBpm={bpm || 120}
               onBpmChange={(newBpm) => {
@@ -146,4 +162,3 @@ export default function TapTempo() {
     </Card>
   )
 }
-

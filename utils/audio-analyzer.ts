@@ -1,4 +1,4 @@
-import { detectPitchYIN, getRMS, SIGNAL_THRESHOLD } from "@/utils/audio-processing"
+import { detectPitchYIN, SIGNAL_THRESHOLD } from "@/utils/audio-processing"
 
 // Augment Window so we can access the legacy webkit-prefixed AudioContext
 // constructor without a cast. Some older WebKit builds (and Safari versions

@@ -77,7 +77,9 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
+      // Law 1: the close key on a destructive toast dims and brightens along
+      // the one ramp; there is no red to reach for.
+      "absolute right-2 top-2 rounded-sm p-1 text-ink-dim opacity-0 hover:text-ink-bright focus:opacity-100 focus:outline-2 focus:outline-dashed focus:outline-ink-dim focus:outline-offset-[3px] group-hover:opacity-100 group-[.destructive]:text-on-fill group-[.destructive]:hover:text-on-fill group-[.destructive]:focus:outline-on-fill",
       className
     )}
     toast-close=""

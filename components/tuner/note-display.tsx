@@ -1,38 +1,38 @@
+import { cn } from "@/lib/utils"
+
 interface NoteDisplayProps {
   note: string
   frequency: number | null
   signalDetected: boolean
   tuningStatus: "flat" | "sharp" | "in-tune" | null
   cents: number
-  isNoteLocked: boolean
 }
 
-export function NoteDisplay({ note, frequency, signalDetected, tuningStatus, cents, isNoteLocked }: NoteDisplayProps) {
-  // Get the color for the note display based on tuning status
-  const getNoteDisplayColor = () => {
-    if (!signalDetected || tuningStatus === null) return "text-muted-foreground opacity-50"
-    if (tuningStatus === "flat" || tuningStatus === "sharp") return "text-red-500"
-    if (tuningStatus === "in-tune") return "text-emerald-500"
-    return "text-muted-foreground opacity-70" // Fallback for any other state
-  }
-
+export function NoteDisplay({ note, frequency, signalDetected, tuningStatus, cents }: NoteDisplayProps) {
   // Show note when signal is detected AND tuningStatus is not null
   const showNote = signalDetected && tuningStatus !== null && note !== "---"
-  const showFrequency = frequency && showNote
+  const showFrequency = frequency !== null && showNote
 
   return (
     <div className="text-center w-full mb-6">
+      {/* Inverse video: the label is the machine naming the reading. */}
+      <div className="inline-block bg-fill text-on-fill px-3 py-[3px] text-sm uppercase tracking-display">
+        Note
+      </div>
       <div
-        className={`text-6xl sm:text-7xl font-bold tabular-nums select-none tracking-tighter transition-colors duration-300 ${getNoteDisplayColor()}`}
+        className={cn(
+          "text-6xl sm:text-7xl tabular-nums select-none tracking-display mt-2",
+          // Glow is the signal of energization: a dead input does not glow.
+          showNote ? "text-ink-bright text-glow" : "text-ink-faint text-glow-none",
+        )}
       >
         {showNote ? note : "---"}
       </div>
-      <div className="text-sm text-muted-foreground mt-1 font-medium transition-opacity duration-300">
+      <div className="text-sm text-ink-dim uppercase tracking-body mt-2 tabular-nums">
         {showFrequency
-          ? `${frequency.toFixed(1)} Hz (${cents > 0 ? "+" : ""}${cents} ct)`
-          : "FREQUENCY"}
+          ? `${frequency.toFixed(1)} Hz · ${cents > 0 ? "+" : ""}${cents} ct`
+          : "Frequency —"}
       </div>
     </div>
   )
 }
-
