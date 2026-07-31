@@ -59,6 +59,22 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   const oscillatorsRef = useRef<{ osc: OscillatorNode; gain: GainNode }[]>([])
   const isPlayingRef = useRef<boolean>(false)
 
+  // Declared above the unmount effect that calls it: as a `const` arrow it is
+  // in the temporal dead zone until this point, so an effect defined earlier
+  // would capture only the first render's binding.
+  const cleanupOscillators = () => {
+    oscillatorsRef.current.forEach(({ osc, gain }) => {
+      try {
+        osc.stop()
+        osc.disconnect()
+        gain.disconnect()
+      } catch {
+        // Ignore errors from already stopped oscillators
+      }
+    })
+    oscillatorsRef.current = []
+  }
+
   // Initialize audio context
   useEffect(() => {
     return () => {
@@ -135,20 +151,6 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     }
   }, [currentBeat]);
 
-  // Clean up oscillators
-  const cleanupOscillators = () => {
-    oscillatorsRef.current.forEach(({ osc, gain }) => {
-      try {
-        osc.stop()
-        osc.disconnect()
-        gain.disconnect()
-      } catch (e) {
-        // Ignore errors from already stopped oscillators
-      }
-    })
-    oscillatorsRef.current = []
-  }
-
   // Initialize audio context if needed
   const ensureAudioContext = () => {
     try {
@@ -164,8 +166,8 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
       if (!audioContextRef.current) {
         console.log("Creating new audio context");
         // Use the modern standardized API with fallback for older browsers
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
         if (!AudioContextClass) {
           console.error("AudioContext is not supported in this browser");
           return false;
@@ -271,7 +273,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
         if (index !== -1) {
           oscillatorsRef.current.splice(index, 1);
         }
-      } catch (e) {
+      } catch {
         // Ignore cleanup errors
       }
     }, Math.max(0, (time + 0.15 - audioContextRef.current.currentTime) * 1000));
@@ -370,13 +372,19 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
         if (audioContextRef.current) {
           try {
             audioContextRef.current.close().catch(() => {});
-          } catch (e) {
+          } catch {
             // Ignore errors
           }
           audioContextRef.current = null;
         }
         
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        // The surrounding catch falls back to ensureAudioContext(); an explicit
+        // throw gets there with a diagnosable message instead of a TypeError
+        // from calling `new` on undefined.
+        if (!AudioContextClass) {
+          throw new Error("Web Audio API is not supported in this browser");
+        }
         audioContextRef.current = new AudioContextClass({ latencyHint: 'interactive' });
         
         createSoundSamples();

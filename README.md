@@ -59,7 +59,7 @@ pnpm dev
 - `pnpm build` - Production build
 - `pnpm start` - Start production server (Railway fallback only; not used on Cloudflare)
 - `pnpm run deploy` - Build and deploy `out/` to Cloudflare Workers (must be `pnpm run deploy`, not `pnpm deploy`)
-- `pnpm lint` - Run linter
+- `pnpm lint` - Run ESLint (flat config in `eslint.config.mjs`, `eslint-config-next` rules)
 - `pnpm test` - Run all tests
 - `pnpm test:unit` - Run unit tests
 - `pnpm test:integration` - Run integration tests
@@ -83,6 +83,7 @@ tests/        → Unit, integration, and security tests
 
 ### July 2026
 
+- Made `pnpm lint` actually run. Next 16 removed the `next lint` subcommand, so the script read `lint` as a directory name and died — meaning the repo had no working linter, and no ESLint dependency or config had ever been committed (`next lint` used to supply both implicitly). ESLint 9 and `eslint-config-next` are now real devDependencies with a flat config in `eslint.config.mjs`. The first real run surfaced 22 pre-existing problems; the mechanically safe ones are fixed here — two `any` casts on `webkitAudioContext` (the `Window` augmentation in `utils/audio-analyzer.ts` already types it), three unused catch bindings, an unused `getRMS` import, and a `cleanupOscillators` declaration hoisted above the unmount effect that captured it from the temporal dead zone. `ClientApp`'s `mounted` gate is gone: `ClientWrapper` already gates on mount with a real `role="status"` loading state, so the second gate only returned `null` for one extra render and left the prerendered body empty. First paint now ships `Initialising █` in the static HTML. The remaining 13 are pre-existing and left alone deliberately — 9 sit in unimported shadcn boilerplate, and 4 are `react-hooks/set-state-in-effect` on working, tested code (the SSR mount gate, the metronome's prop-to-state sync, the tuner's async init) whose fixes are behavioral restructures, not lint cleanups
 - Fixed the tuning meter disagreeing with its own reading. The needle carried a `1.1` multiplier that nothing else accounted for, so the meter's edges were really ±45.5 cents while the labels claimed ±50, and the drawn target spanned ±9.09 cents against a classifier that calls ±5 in tune. Between 5 and 9 cents off, the needle sat *inside* the lit target while the panel read "sharp". The needle, the zone and the scale labels now derive from one exported `IN_TUNE_CENTS` / `METER_RANGE_CENTS` pair, so the needle crosses the zone edge at the same instant the status flips
 - Cut the screen simulation's main-thread cost by ~73% (0.067s → 0.018s of CPU per six idle seconds) by drifting the scanlines with a `transform` on an over-tall layer instead of an animated `background-position`. Identical on screen; the old form repainted the full viewport every frame. Measurement also corrected an assumption — the scanlines were the expensive layer, roughly 4× the plasma bleed sitting next to them, which is the opposite of what the code comments claimed
 - Moved the screen simulation to a fixed, body-level `.ac-glass` layer above the portal z-index. Radix mounts dropdowns and dialogs to `<body>`, so an overlay nested in the frame stopped at their edge and they rendered flat against a panel visibly behind glass. The amplified plasma glow moved to `:root` for the same reason

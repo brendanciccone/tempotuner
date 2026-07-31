@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { useRef, useState, type KeyboardEvent } from "react"
 import TapTempo from "@/components/tap-tempo"
 import Tuner from "@/components/tuner"
 import { cn } from "@/lib/utils"
@@ -9,7 +9,6 @@ type TabId = "tuner" | "tempo"
 const TAB_ORDER: readonly TabId[] = ["tuner", "tempo"] as const
 
 export default function ClientApp() {
-  const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>("tuner")
   const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
     tuner: null,
@@ -46,15 +45,6 @@ export default function ClientApp() {
     // Move focus only; do NOT change activeTab. Enter/Space on the focused tab
     // will fire its onClick and switch panels.
     tabRefs.current[TAB_ORDER[nextIndex]]?.focus()
-  }
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Return null on server to prevent hydration issues
-  if (!mounted) {
-    return null
   }
 
   // Soft keys stay Title Case — casing is semantic, and these are operator
