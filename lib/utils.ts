@@ -6,10 +6,17 @@ import { extendTailwindMerge } from "tailwind-merge"
 // real colour class followed in the same cn() call. That silently rendered
 // SelectLabel at body size instead of 10px. Registering the token in the
 // font-size group puts it in the right conflict class.
+//
+// The tracking tokens are the same hazard one property over: unregistered,
+// tailwind-merge matches none of its groups, so two of them survive a merge
+// together and CSS source order picks the winner instead of call order. Every
+// custom scale this theme adds has to be declared here, not just the one that
+// was caught rendering wrong.
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
       "font-size": ["text-micro"],
+      tracking: ["tracking-display", "tracking-body", "tracking-micro"],
     },
   },
 })

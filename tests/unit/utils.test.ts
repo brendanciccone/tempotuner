@@ -3,9 +3,10 @@ import { cn } from "@/lib/utils"
 
 // ----------------------------------------------------------------
 // cn() merges Tailwind classes, and tailwind-merge only resolves conflicts it
-// recognises. This theme adds a custom --text-micro token, which it does NOT
-// recognise by default — so these guard the extension that teaches it, and the
-// ordinary conflict resolution that must keep working alongside.
+// recognises. This theme adds custom --text-micro and --tracking-* tokens,
+// which it does NOT recognise by default — so these guard the extension that
+// teaches it, and the ordinary conflict resolution that must keep working
+// alongside.
 // ----------------------------------------------------------------
 
 describe("cn", () => {
@@ -54,5 +55,35 @@ describe("cn and the custom text-micro token", () => {
 
   it("leaves non-conflicting classes alone", () => {
     expect(cn("font-micro tracking-micro uppercase")).toBe("font-micro tracking-micro uppercase")
+  })
+})
+
+// ----------------------------------------------------------------
+// The same hazard, one property over
+// ----------------------------------------------------------------
+
+describe("cn and the custom tracking tokens", () => {
+  it("resolves two custom tracking values to the last one", () => {
+    // Unregistered, these matched none of tailwind-merge's groups, so both
+    // survived the merge and CSS source order decided the winner instead of
+    // call order — a base class could silently beat the override meant to
+    // replace it. Every UI primitive that sets tracking also merges className,
+    // so this was reachable from any caller.
+    expect(cn("tracking-display", "tracking-micro")).toBe("tracking-micro")
+    expect(cn("tracking-micro", "tracking-display")).toBe("tracking-display")
+    expect(cn("tracking-body", "tracking-display")).toBe("tracking-display")
+  })
+
+  it("treats a custom tracking value as conflicting with a stock one", () => {
+    // They occupy one CSS property, so the group has to span both scales.
+    expect(cn("tracking-display", "tracking-tight")).toBe("tracking-tight")
+    expect(cn("tracking-widest", "tracking-body")).toBe("tracking-body")
+  })
+
+  it("keeps tracking alongside classes it does not conflict with", () => {
+    const merged = cn("tracking-display", "text-ink", "uppercase")
+
+    expect(merged).toContain("tracking-display")
+    expect(merged).toContain("text-ink")
   })
 })

@@ -15,6 +15,16 @@ interface MetronomeProps {
   onStateChange?: (isPlaying: boolean, currentBeat: number) => void
 }
 
+/**
+ * Web Audio raises InvalidStateError for the routine "this node or context is
+ * already in the state you are asking for" cases — stopping an oscillator that
+ * was scheduled but never started, closing a context that is already closed.
+ * Teardown hits both by design. Every other DOMException is a real failure and
+ * must not be swallowed with them.
+ */
+const isAlreadyInTargetState = (err: unknown): boolean =>
+  err instanceof DOMException && err.name === "InvalidStateError"
+
 // Custom SelectItem with the selection marker on the right
 const CustomSelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
@@ -68,8 +78,8 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
         osc.stop()
         osc.disconnect()
         gain.disconnect()
-      } catch {
-        // Ignore errors from already stopped oscillators
+      } catch (err) {
+        if (!isAlreadyInTargetState(err)) throw err
       }
     })
     oscillatorsRef.current = []
@@ -268,13 +278,11 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     
     // Cleanup when done
     setTimeout(() => {
-      try {
-        const index = oscillatorsRef.current.findIndex(item => item.osc === osc);
-        if (index !== -1) {
-          oscillatorsRef.current.splice(index, 1);
-        }
-      } catch {
-        // Ignore cleanup errors
+      // No try/catch: findIndex and splice on a plain array cannot throw, so
+      // one here could only have hidden a future unrelated failure.
+      const index = oscillatorsRef.current.findIndex(item => item.osc === osc);
+      if (index !== -1) {
+        oscillatorsRef.current.splice(index, 1);
       }
     }, Math.max(0, (time + 0.15 - audioContextRef.current.currentTime) * 1000));
     
@@ -371,9 +379,19 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
       try {
         if (audioContextRef.current) {
           try {
-            audioContextRef.current.close().catch(() => {});
-          } catch {
-            // Ignore errors
+            // close() rejects asynchronously as well as throwing synchronously.
+            // This context is discarded on the next line either way, so an
+            // unexpected close failure has nothing left to recover — but it
+            // still gets reported rather than dropped, because it means the old
+            // context is leaking rather than closing.
+            audioContextRef.current.close().catch((err: unknown) => {
+              if (!isAlreadyInTargetState(err)) {
+                console.error("Failed to close the previous AudioContext:", err);
+              }
+            });
+          } catch (err) {
+            // The enclosing catch logs and falls back to ensureAudioContext().
+            if (!isAlreadyInTargetState(err)) throw err;
           }
           audioContextRef.current = null;
         }
