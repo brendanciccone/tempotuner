@@ -81,6 +81,10 @@ tests/        → Unit, integration, and security tests
 
 ## Recent Additions
 
+### August 2026
+
+- Raised the `undici` override from `^7.28.0` to `^7.29.0`, resolving five Dependabot alerts at once — GHSA-4cwx-7wf7-3272 (high; `Cache-Control: private=""` slipping past the shared-cache guard, plus an uncaught `TypeError` when a header mixes bare `private` with `private="hdr"`), GHSA-jr45-8vmc-qm54, GHSA-8xcm-r25x-g524, GHSA-v3r7-h72x-cjcm and GHSA-m8rv-5g2x-5cg5. All five are fixed in 7.29.0 and all reach the tree as dev-only transitives, through `jsdom` (which accepts `^7.24.5`) and through `wrangler` → `miniflare` (which pins `7.28.0` exactly, so only the override lifts it). Nothing in the app calls undici — none of the affected surfaces (the cache and retry interceptors, `setCookie`, the HTTP/1.1 blob-body path) run in a static export — so this closes the alerts without touching runtime behaviour
+
 ### July 2026
 
 - Closed the `tracking-*` half of the `cn()` token bug and stopped the metronome swallowing Web Audio errors. The `text-micro` fix registered one custom token with `tailwind-merge`; the three `--tracking-*` tokens had the identical defect one property over — unregistered, they matched none of its groups, so two survived a merge together and CSS source order picked the winner instead of call order. No call site collided yet, but every UI primitive that sets tracking also merges `className`, so the first override would have lost silently exactly the way `SelectLabel` did. Separately, three `catch` blocks in the metronome discarded every error rather than the expected already-stopped/already-closed `InvalidStateError`; they now rethrow anything else, and the one wrapped around an array `findIndex`/`splice` — which cannot throw — is gone rather than narrowed
