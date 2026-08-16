@@ -96,6 +96,21 @@
      them, matching the CRT scanlines they sit beside. */
   --ac-mesh-pitch: 3px;
   --ac-mesh-wire: 0.075;
+
+  /* PERSISTENCE. A cell that stops being driven does not go dark on the same
+     frame it stops — it relaxes. Nothing on this panel fades IN: energizing is
+     the drive arriving, which is instant, and only the OFF edge decays.
+
+     These are the source framework's UI caps (250ms for anything a user waits
+     on, 60ms for a control de-energizing), not a decay figure for this
+     phosphor: the tube here is a look rather than a part number, and inventing
+     a spectral tail for it would be inventing a measurement. The caps hold
+     regardless of which tube is fitted, so they are the honest number to
+     spend. */
+  --decay: 90ms;
+  --decay-fast: 60ms;
+  /* Sampled from a relaxation curve: steep at first, then a long tail. */
+  --decay-ease: cubic-bezier(0.1, 0.72, 0.22, 1);
 }
 
 @theme {
@@ -245,6 +260,42 @@
 
 @utility box-glow {
   box-shadow: var(--glow-box);
+}
+
+/* A lamp: anything whose lit state is a discharge rather than a style — soft
+   keys, tabs, the tap pad, the status strip, a beat cell.
+
+   The asymmetry is the whole point and it is why this cannot be a Tailwind
+   `transition-*` class: the base rule owns the decay, and every selector that
+   means "currently driven" zeroes the duration. Becoming lit therefore snaps
+   (the lit rule is the one in effect), and going dark relaxes on the tail (the
+   base rule is). Hover and :active count as driven for the same reason a finger
+   on a key counts as drive.
+
+   Not gated behind prefers-reduced-motion: nothing here moves or changes size.
+   A 90ms colour relaxation is below the threshold at which a transition reads
+   as animation at all, and removing it would only make the panel snap harder. */
+@layer components {
+  .ac-lamp {
+    transition-property: background-color, border-color, color, box-shadow;
+    transition-duration: var(--decay);
+    transition-timing-function: var(--decay-ease);
+  }
+
+  .ac-lamp:hover,
+  .ac-lamp:active,
+  .ac-lamp[data-lit="true"],
+  .ac-lamp[aria-pressed="true"],
+  .ac-lamp[aria-selected="true"],
+  .ac-lamp[aria-expanded="true"] {
+    transition-duration: 0s;
+  }
+
+  /* A control that has just been switched off is not decaying, it is dead:
+     de-energized structure goes on the short cap. */
+  .ac-lamp:disabled {
+    transition-duration: var(--decay-fast);
+  }
 }
 
 /* Hard on/off — a plasma panel has no in-between frames. */

@@ -56,7 +56,7 @@ export default function ClientApp() {
   // reads as a label sitting too high. Keep the height, centre the label.
   const tabClasses = (tab: TabId) =>
     cn(
-      "flex-1 flex items-center justify-center min-h-[60px] border-2 rounded-lg px-6 text-xl cursor-pointer",
+      "ac-lamp flex-1 flex items-center justify-center min-h-[60px] border-2 rounded-lg px-6 text-xl cursor-pointer",
       "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
       activeTab === tab
         ? "bg-fill text-on-fill border-fill box-glow"

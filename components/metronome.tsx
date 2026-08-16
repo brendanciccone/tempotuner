@@ -7,7 +7,9 @@ import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectGroup, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import * as SelectPrimitive from "@radix-ui/react-select"
+import { BeatIndicator } from "@/components/beat-indicator"
 import { cn } from "@/lib/utils"
+import { accentForBeat, beatPaintDelayMs, clickVoiceForAccent } from "@/utils/metronome-timing"
 
 interface MetronomeProps {
   initialBpm: number
@@ -68,6 +70,15 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   const beatsPerMeasureRef = useRef<number>(beatsPerMeasure)
   const oscillatorsRef = useRef<{ osc: OscillatorNode; gain: GainNode }[]>([])
   const isPlayingRef = useRef<boolean>(false)
+  // The scheduler runs from a setTimeout chain started at toggle time, so every
+  // value it reads has to come from a ref: the state it captured belongs to the
+  // render that started it. Compound accents were the one that got missed —
+  // switching 4/4 to 6/8 mid-run kept clicking flat until you stopped.
+  const isCompoundMeterRef = useRef<boolean>(false)
+  // Beat paints are queued ahead of time, so they have to be cancellable: a
+  // paint left over from a stopped metronome would light a cell on a panel that
+  // is no longer running.
+  const beatPaintTimeoutsRef = useRef<number[]>([])
 
   // Declared above the unmount effect that calls it: as a `const` arrow it is
   // in the temporal dead zone until this point, so an effect defined earlier
@@ -85,6 +96,11 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     oscillatorsRef.current = []
   }
 
+  const cancelPendingBeatPaints = () => {
+    beatPaintTimeoutsRef.current.forEach((id) => window.clearTimeout(id))
+    beatPaintTimeoutsRef.current = []
+  }
+
   // Initialize audio context
   useEffect(() => {
     return () => {
@@ -92,6 +108,8 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
       if (timerIDRef.current) {
         window.clearTimeout(timerIDRef.current)
       }
+
+      cancelPendingBeatPaints()
 
       // Clean up oscillators
       cleanupOscillators()
@@ -124,11 +142,13 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     beatsPerMeasureRef.current = numerator
 
     // Detect compound meters (6/8, 9/8, 12/8, etc.)
-    setIsCompoundMeter((numerator === 6 || numerator === 9 || numerator === 12) && denominator === 8)
+    const compound = (numerator === 6 || numerator === 9 || numerator === 12) && denominator === 8
+    setIsCompoundMeter(compound)
+    isCompoundMeterRef.current = compound
 
     // Reset beat counter ONLY when time signature changes and metronome is playing
     if (isPlaying) {
-      console.log("Resetting beat counter due to time signature change");
+      cancelPendingBeatPaints()
       beatCountRef.current = 0;
       setCurrentBeat(0);
     }
@@ -148,18 +168,11 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   // Notify parent component of state changes
   useEffect(() => {
     if (onStateChange) {
-      // Only notify parent of currentBeat if it's a meaningful value (>0)
-      // This prevents parent components from resetting the beat counter
+      // Only report a beat while running; a stopped metronome reports the
+      // downbeat so parents do not hold a stale beat lit.
       onStateChange(isPlaying, isPlaying ? currentBeat : 0);
     }
   }, [isPlaying, currentBeat, onStateChange]);
-
-  // Keep track of beat updates to prevent unexpected resets
-  useEffect(() => {
-    if (isPlayingRef.current) {
-      console.log(`Beat state updated: ${currentBeat}`);
-    }
-  }, [currentBeat]);
 
   // Initialize audio context if needed
   const ensureAudioContext = () => {
@@ -167,14 +180,12 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
       // Check if we have an existing context that's suspended
       if (audioContextRef.current && audioContextRef.current.state === "suspended") {
         // Try to resume it
-        console.log("Resuming suspended audio context");
         audioContextRef.current.resume();
         return true;
       }
 
       // If we don't have a context or if there's an issue with the existing one, create a new one
       if (!audioContextRef.current) {
-        console.log("Creating new audio context");
         // Use the modern standardized API with fallback for older browsers
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
@@ -204,7 +215,8 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
 
   // Play a metronome click with nicer waveforms
   const playClick = (time: number) => {
-    if (!audioContextRef.current || !isPlayingRef.current) return;
+    const audioContext = audioContextRef.current;
+    if (!audioContext || !isPlayingRef.current) return;
 
     // Ensure we have a valid time parameter
     if (isNaN(time)) {
@@ -214,68 +226,38 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
 
     // Get current beat count before incrementing
     const currentBeatInMeasure = beatCountRef.current;
-    
-    // Debug beat count - add more details
-    console.log(`=============================`);
-    console.log(`Playing beat ${currentBeatInMeasure + 1} of ${beatsPerMeasureRef.current}, time: ${time.toFixed(3)}`);
-    console.log(`Beat count ref: ${beatCountRef.current}, UI state: ${currentBeat}`);
-    
-    // Use more distinct sound parameters for clearer differences
-    let soundType: OscillatorType;
-    let frequency: number;
-    let gain: number;
-    let message: string;
-    
-    // First beat uses completely different sound (triangle, higher pitch, louder)
-    if (currentBeatInMeasure === 0) {
-      soundType = "triangle";
-      frequency = 880; // A5
-      gain = 0.7;
-      message = `*** PRIMARY ACCENT - high pitch (beat ${currentBeatInMeasure + 1}) ***`;
-    } 
-    // Secondary accents for compound meters
-    else if (isCompoundMeter && currentBeatInMeasure % 3 === 0) {
-      soundType = "sine";
-      frequency = 659.25; // E5
-      gain = 0.4;
-      message = `*** SECONDARY ACCENT - medium pitch (beat ${currentBeatInMeasure + 1}) ***`;
-    } 
-    // Regular beats
-    else {
-      soundType = "sine";
-      frequency = 440; // A4
-      gain = 0.25;
-      message = `Regular beat - normal pitch (beat ${currentBeatInMeasure + 1})`;
-    }
-    
-    console.log(message);
-    console.log(`Using sound: ${soundType}, ${frequency}Hz, gain: ${gain}`);
-    
+
+    // One accent map, shared with the beat indicator, so what the panel shows
+    // and what the speaker plays cannot disagree.
+    const voice = clickVoiceForAccent(
+      accentForBeat(currentBeatInMeasure, isCompoundMeterRef.current),
+    );
+
     // Create oscillator directly
-    const osc = audioContextRef.current.createOscillator();
-    const gainNode = audioContextRef.current.createGain();
-    
+    const osc = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
     // Configure sound
-    osc.type = soundType;
-    osc.frequency.value = frequency;
-    
+    osc.type = voice.type;
+    osc.frequency.value = voice.frequency;
+
     // Set envelope
     gainNode.gain.value = 0;
     gainNode.gain.setValueAtTime(0, time);
-    gainNode.gain.linearRampToValueAtTime(gain, time + 0.005);
+    gainNode.gain.linearRampToValueAtTime(voice.gain, time + 0.005);
     gainNode.gain.linearRampToValueAtTime(0.0001, time + 0.1);
-    
+
     // Connect and play
     osc.connect(gainNode);
-    gainNode.connect(audioContextRef.current.destination);
-    
+    gainNode.connect(audioContext.destination);
+
     // Start and schedule stop
     osc.start(time);
     osc.stop(time + 0.1);
-    
+
     // Track for cleanup
     oscillatorsRef.current.push({ osc, gain: gainNode });
-    
+
     // Cleanup when done
     setTimeout(() => {
       // No try/catch: findIndex and splice on a plain array cannot throw, so
@@ -284,21 +266,21 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
       if (index !== -1) {
         oscillatorsRef.current.splice(index, 1);
       }
-    }, Math.max(0, (time + 0.15 - audioContextRef.current.currentTime) * 1000));
-    
-    // Update beat count AFTER scheduling the sound
-    const nextBeat = (currentBeatInMeasure + 1) % beatsPerMeasureRef.current;
-    beatCountRef.current = nextBeat;
-    console.log(`Beat counter updated to: ${nextBeat}`);
-    
-    // Update UI state on next animation frame
-    requestAnimationFrame(() => {
+    }, Math.max(0, (time + 0.15 - audioContext.currentTime) * 1000));
+
+    // Light the beat when it SOUNDS, not when it is scheduled. The scheduler
+    // runs 100ms ahead of the clock, so painting here would put the display
+    // ahead of the click by up to 40% of a beat at 240 BPM.
+    const paintId = window.setTimeout(() => {
+      beatPaintTimeoutsRef.current = beatPaintTimeoutsRef.current.filter((id) => id !== paintId);
       if (isPlayingRef.current) {
-        setCurrentBeat(nextBeat);
+        setCurrentBeat(currentBeatInMeasure);
       }
-    });
-    
-    console.log(`=============================`);
+    }, beatPaintDelayMs(time, audioContext.currentTime));
+    beatPaintTimeoutsRef.current.push(paintId);
+
+    // Update beat count AFTER scheduling the sound
+    beatCountRef.current = (currentBeatInMeasure + 1) % beatsPerMeasureRef.current;
   };
 
   // Schedule upcoming metronome clicks with improved timing and cleanup
@@ -327,8 +309,6 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   // Create sound to use for click sounds
   const createSoundSamples = useCallback(() => {
     if (!audioContextRef.current) return;
-    
-    console.log("Creating sound samples...");
     
     // Create test oscillators to ensure they're allowed
     const testOsc = audioContextRef.current.createOscillator();
@@ -364,16 +344,16 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
         timerIDRef.current = null;
       }
 
+      cancelPendingBeatPaints();
+
       // Clean up oscillators
       cleanupOscillators();
-      
+
       // Reset state
       setIsPlaying(false);
       isPlayingRef.current = false;
       beatCountRef.current = 0;
       setCurrentBeat(0);
-      
-      console.log("Metronome stopped, beat counter reset to 0");
     } else {
       // Create fresh audio context to avoid issues
       try {
@@ -425,8 +405,6 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
         window.clearTimeout(timerIDRef.current);
         timerIDRef.current = null;
       }
-      
-      console.log("Metronome started with fresh context - beat counter set to 0");
       
       // Start scheduling
       scheduler();
@@ -567,6 +545,15 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
             <span>{bpm} BPM</span>
             <span>240</span>
           </div>
+
+          {/* The measure, one cell per beat. Useful with the volume down and
+              the only way to see where the accents fall in an odd meter. */}
+          <BeatIndicator
+            beatsPerMeasure={beatsPerMeasure}
+            currentBeat={currentBeat}
+            isPlaying={isPlaying}
+            isCompoundMeter={isCompoundMeter}
+          />
         </div>
       </div>
 
