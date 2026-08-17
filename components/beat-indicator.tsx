@@ -1,9 +1,15 @@
+import type * as React from "react"
+
 import { cn } from "@/lib/utils"
 import { accentForBeat } from "@/utils/metronome-timing"
 
 interface BeatIndicatorProps {
   beatsPerMeasure: number
-  /** Zero-based index of the beat currently sounding. */
+  /**
+   * Zero-based index of the beat currently sounding. Negative means nothing is
+   * sounding yet — the gap between pressing start and the first click, which
+   * the metronome reports rather than pre-lighting the downbeat.
+   */
   currentBeat: number
   isPlaying: boolean
   isCompoundMeter: boolean
@@ -23,7 +29,7 @@ export const BeatIndicator = ({
   currentBeat,
   isPlaying,
   isCompoundMeter,
-}: BeatIndicatorProps) => {
+}: BeatIndicatorProps): React.JSX.Element => {
   const beats = Array.from({ length: Math.max(0, beatsPerMeasure) }, (_, index) => index)
 
   return (

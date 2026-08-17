@@ -18,15 +18,6 @@ const litIndexes = (container: HTMLElement): number[] =>
 // ----------------------------------------------------------------
 
 describe("beat indicator", () => {
-  it("draws one cell per beat in the measure", () => {
-    const { container } = render(
-      <BeatIndicator beatsPerMeasure={7} currentBeat={0} isPlaying={false} isCompoundMeter={false} />,
-    )
-
-    expect(cells(container)).toHaveLength(7)
-    expect(cells(container).map((cell) => cell.textContent)).toEqual(["1", "2", "3", "4", "5", "6", "7"])
-  })
-
   it("renders nothing rather than throwing on a meterless measure", () => {
     // Guard rather than feature: no time signature in the app has fewer than
     // two beats, but a zero here used to be one Array.from away from a crash.
@@ -35,6 +26,15 @@ describe("beat indicator", () => {
     )
 
     expect(cells(container)).toHaveLength(0)
+  })
+
+  it("draws one cell per beat in the measure", () => {
+    const { container } = render(
+      <BeatIndicator beatsPerMeasure={7} currentBeat={0} isPlaying={false} isCompoundMeter={false} />,
+    )
+
+    expect(cells(container)).toHaveLength(7)
+    expect(cells(container).map((cell) => cell.textContent)).toEqual(["1", "2", "3", "4", "5", "6", "7"])
   })
 
   it("lights nothing while the metronome is stopped", () => {
@@ -54,6 +54,18 @@ describe("beat indicator", () => {
 
     expect(litIndexes(container)).toEqual([2])
     expect(cells(container)[2].textContent).toBe("3")
+  })
+
+  it("lights nothing before the first click of a run sounds", () => {
+    // Regression: the metronome used to report beat 0 the moment it started,
+    // which lit the downbeat cell ~60ms before its own click — the exact lead
+    // the scheduled paint exists to remove. A negative beat means "nothing is
+    // sounding yet" and must light no cell at all.
+    const { container } = render(
+      <BeatIndicator beatsPerMeasure={4} currentBeat={-1} isPlaying isCompoundMeter={false} />,
+    )
+
+    expect(litIndexes(container)).toEqual([])
   })
 
   it("lights nothing when the reported beat is outside the measure", () => {

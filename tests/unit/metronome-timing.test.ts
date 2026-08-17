@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  type BeatAccent,
   accentForBeat,
   beatPaintDelayMs,
   clickVoiceForAccent,
@@ -59,7 +60,11 @@ describe("clickVoiceForAccent", () => {
   })
 
   it("keeps every voice inside unity gain", () => {
-    for (const accent of ["primary", "secondary", "regular"] as const) {
+    // `satisfies` rather than `as const`: this list has to stay checked against
+    // the exported accent contract, so adding a fourth accent fails here.
+    const accents = ["primary", "secondary", "regular"] satisfies readonly BeatAccent[]
+
+    for (const accent of accents) {
       const { gain } = clickVoiceForAccent(accent)
       expect(gain).toBeGreaterThan(0)
       expect(gain).toBeLessThanOrEqual(1)

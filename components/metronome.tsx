@@ -18,6 +18,14 @@ interface MetronomeProps {
 }
 
 /**
+ * No beat is sounding. The first click of a run is scheduled 100ms out, so
+ * between pressing start and that click there is genuinely nothing to light —
+ * reporting beat 0 there lit the downbeat cell ahead of its own click, which is
+ * the exact lead the scheduled paint below exists to remove.
+ */
+const NO_BEAT = -1
+
+/**
  * Web Audio raises InvalidStateError for the routine "this node or context is
  * already in the state you are asking for" cases — stopping an oscillator that
  * was scheduled but never started, closing a context that is already closed.
@@ -54,7 +62,7 @@ CustomSelectItem.displayName = SelectPrimitive.Item.displayName
 export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [bpm, setBpm] = useState(initialBpm || 120)
-  const [currentBeat, setCurrentBeat] = useState(0)
+  const [currentBeat, setCurrentBeat] = useState(NO_BEAT)
   const [timeSignature, setTimeSignature] = useState("4/4")
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4)
   const [isNotesExpanded, setIsNotesExpanded] = useState(false)
@@ -150,7 +158,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     if (isPlaying) {
       cancelPendingBeatPaints()
       beatCountRef.current = 0;
-      setCurrentBeat(0);
+      setCurrentBeat(NO_BEAT);
     }
   }, [timeSignature, isPlaying])
 
@@ -168,9 +176,9 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   // Notify parent component of state changes
   useEffect(() => {
     if (onStateChange) {
-      // Only report a beat while running; a stopped metronome reports the
-      // downbeat so parents do not hold a stale beat lit.
-      onStateChange(isPlaying, isPlaying ? currentBeat : 0);
+      // Only report a beat while running; a stopped metronome reports NO_BEAT
+      // so parents do not hold a stale beat lit.
+      onStateChange(isPlaying, isPlaying ? currentBeat : NO_BEAT);
     }
   }, [isPlaying, currentBeat, onStateChange]);
 
@@ -353,7 +361,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
       setIsPlaying(false);
       isPlayingRef.current = false;
       beatCountRef.current = 0;
-      setCurrentBeat(0);
+      setCurrentBeat(NO_BEAT);
     } else {
       // Create fresh audio context to avoid issues
       try {
@@ -391,9 +399,10 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
         ensureAudioContext();
       }
       
-      // Initialize state for starting
+      // Initialize state for starting. NO_BEAT rather than 0: the first click
+      // is 100ms out and its own paint lights the downbeat when it sounds.
       beatCountRef.current = 0;
-      setCurrentBeat(0);
+      setCurrentBeat(NO_BEAT);
       nextNoteTimeRef.current = audioContextRef.current!.currentTime + 0.1;
       
       // Set playing states
