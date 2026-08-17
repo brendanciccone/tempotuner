@@ -267,3 +267,55 @@ describe("terminal type scale", () => {
     expect(globalsCss).toMatch(/--font-micro:\s*var\(--font-silkscreen\)/)
   })
 })
+
+// ----------------------------------------------------------------
+// Persistence: energizing is instant, de-energizing relaxes
+// ----------------------------------------------------------------
+
+/** Pull a `--token: <duration>ms;` declaration out of globals.css. */
+const readDurationMs = (token: string): number => {
+  const match = globalsCss.match(new RegExp(`${token}:\\s*(\\d+)ms;`))
+  if (!match) throw new Error(`${token} is not defined in ms in app/globals.css`)
+  return Number.parseInt(match[1], 10)
+}
+
+describe("phosphor persistence", () => {
+  it("keeps both decay durations inside the UI caps", () => {
+    // 250ms is the ceiling for anything a user waits on and 60ms for a control
+    // de-energizing. Past those the panel stops feeling like it is redrawing
+    // and starts feeling slow, which is the failure this cap exists to prevent.
+    expect(readDurationMs("--decay")).toBeGreaterThan(0)
+    expect(readDurationMs("--decay")).toBeLessThanOrEqual(250)
+    expect(readDurationMs("--decay-fast")).toBeLessThanOrEqual(60)
+    expect(readDurationMs("--decay-fast")).toBeLessThanOrEqual(readDurationMs("--decay"))
+  })
+
+  it("only ever decays the OFF edge", () => {
+    // The asymmetry IS the effect: the base rule carries the tail and every
+    // "currently driven" selector zeroes it, so lighting up snaps and going
+    // dark relaxes. A single shared duration would fade the panel ON, which no
+    // emitter does.
+    expect(globalsCss).toMatch(/\.ac-lamp\s*\{[^}]*transition-duration:\s*var\(--decay\)/)
+
+    const litRule = globalsCss.match(/((?:\s*\.ac-lamp[^,{]*,)+\s*\.ac-lamp[^,{]*)\{\s*transition-duration:\s*0s/)
+    expect(litRule, ".ac-lamp has no rule zeroing the duration while driven").not.toBeNull()
+
+    const drivenSelectors = litRule?.[1] ?? ""
+    for (const state of [":hover", ":active", '[data-lit="true"]', '[aria-pressed="true"]']) {
+      expect(drivenSelectors, `${state} is not treated as driven`).toContain(state)
+    }
+  })
+
+  it("never animates geometry", () => {
+    // Law 3: elevation does not exist and nothing moves under a decay. The
+    // transition list is colour and glow only — a width or transform in here
+    // would turn a relaxation into an animation, which reduced-motion users
+    // have asked not to be shown.
+    const properties = globalsCss.match(/\.ac-lamp\s*\{[^}]*transition-property:\s*([^;]+);/)
+    expect(properties, ".ac-lamp declares no transition-property").not.toBeNull()
+
+    for (const property of properties?.[1].split(",").map((name) => name.trim()) ?? []) {
+      expect(["background-color", "border-color", "color", "box-shadow"]).toContain(property)
+    }
+  })
+})

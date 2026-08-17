@@ -90,15 +90,17 @@ export default function TapTempo() {
     setIsMetronomePlaying(playing)
     setCurrentBeat(beat)
 
-    // Animate tap button on beat 1 (regardless of any other conditions)
-    if (playing && beat === 1) {
+    // Flash the pad on the downbeat. The metronome reports the beat that is
+    // sounding, zero-based, so the downbeat is 0 — it used to report the NEXT
+    // beat, which put this on 1 and lit the pad ahead of the click.
+    if (playing && beat === 0) {
       setIsAnimating(true)
       setTimeout(() => setIsAnimating(false), 100)
     }
   }
 
   // The downbeat lights the pad, so the pad is the visual metronome too
-  const isDownbeat = isMetronomePlaying && currentBeat === 1
+  const isDownbeat = isMetronomePlaying && currentBeat === 0
   const isLit = isAnimating || isDownbeat
 
   return (
@@ -134,13 +136,14 @@ export default function TapTempo() {
           <button
             type="button"
             className={cn(
-              "w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-left text-xl uppercase tracking-display cursor-pointer select-none",
+              "ac-lamp w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-left text-xl uppercase tracking-display cursor-pointer select-none",
               isLit
                 ? "bg-fill text-on-fill border-fill box-glow"
                 : "bg-transparent text-ink border-stroke text-glow",
               "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
             )}
             onClick={handleTap}
+            data-lit={isLit}
             aria-label="Tap to set tempo"
           >
             <span className="pointer-events-none">Tap</span>

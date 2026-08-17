@@ -4,11 +4,13 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
-// The soft key. No transitions anywhere below: a redrawn screen has no
-// in-between frames, so press snaps straight to inverse video.
+// The soft key. Press snaps straight to inverse video — a screen being redrawn
+// has no in-between frames — and only the release relaxes, on the phosphor
+// tail carried by .ac-lamp. No easing is declared here: the direction of the
+// edge decides the duration, which a Tailwind transition class cannot express.
 const buttonVariants = cva(
   cn(
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border-2 uppercase tracking-body cursor-pointer",
+    "ac-lamp inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border-2 uppercase tracking-body cursor-pointer",
     "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
     "disabled:pointer-events-none disabled:text-ink-faint disabled:border-stroke-dim disabled:bg-transparent disabled:text-glow-none disabled:shadow-none",
   ),

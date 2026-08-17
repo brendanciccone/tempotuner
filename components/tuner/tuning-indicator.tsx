@@ -87,11 +87,12 @@ export function TuningIndicator({ cents, tuningStatus, signalDetected }: TuningI
           line when it is only reporting. */}
       <div
         className={cn(
-          "w-full mt-2 px-3 py-1 text-sm uppercase tracking-body text-center tabular-nums",
+          "ac-lamp w-full mt-2 px-3 py-1 text-sm uppercase tracking-body text-center tabular-nums",
           isInTune
             ? "bg-fill text-on-fill box-glow"
             : "border-y-2 border-stroke-dim text-ink",
         )}
+        data-lit={isInTune}
         role="status"
         aria-live="polite"
       >
