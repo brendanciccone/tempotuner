@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 // ----------------------------------------------------------------
@@ -89,5 +91,80 @@ describe("browserslist query cache (GHSA / Dependabot #79)", () => {
 
     expect(major).toBe(4)
     expect(minor * 1000 + patch).toBeGreaterThanOrEqual(28 * 1000 + 7)
+  })
+})
+
+// ----------------------------------------------------------------
+// The September 2026 floors — Next.js 16.3.3+, sharp 0.35.4+, js-yaml 4.3.2+ —
+// have the same shape as the browserslist one above: two of them live in
+// `pnpm.overrides` and the third is a pinned version, so nothing this repo owns
+// changes and no other test here would notice a regression.
+//
+// Unlike browserslist there is no behaviour to drive from a test. Both Next.js
+// advisories need a running server (the Windows path handler, the AVIF branch of
+// the Image Optimization API) that the static export does not emit, and the
+// sharp advisory is a libheif defect in a native binary. The floor is the
+// assertion, so these guard the comparison itself as well as the versions: the
+// mistake this PR started from was reading 16.2.12 as patched when the fix
+// landed in 16.3.3, which any comparison that stops at the patch number accepts.
+// ----------------------------------------------------------------
+
+// Resolved from the cwd rather than from `import.meta.url`: the jsdom
+// environment hands modules a non-`file:` URL, which readFileSync rejects.
+// Vitest runs from the directory holding vitest.config.ts, which is the root.
+const lockfile = readFileSync(resolve(process.cwd(), "pnpm-lock.yaml"), "utf8")
+
+// pnpm writes concrete versions as `  name@1.2.3:` under `packages:` and as
+// `  name@1.2.3(peer@4.5.6):` under `snapshots:`. Ranges in the `overrides:`
+// block ("^4.3.2") carry no patch triple after the `@`, so they never match.
+const lockedVersionsOf = (name: string) => {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const entries = lockfile.matchAll(new RegExp(`^ {2}${escaped}@(\\d+\\.\\d+\\.\\d+)[:(]`, "gm"))
+
+  return [...new Set([...entries].map(([, version]) => version))]
+}
+
+const isAtLeast = (version: string, floor: string) => {
+  const parts = version.split(".").map(Number)
+  const floorParts = floor.split(".").map(Number)
+
+  for (let i = 0; i < 3; i += 1) {
+    if (parts[i] !== floorParts[i]) return parts[i] > floorParts[i]
+  }
+
+  return true
+}
+
+describe("patched-release comparison", () => {
+  // A guard that cannot fail is worse than no guard. 16.2.12 vs 16.3.3 is the
+  // case that matters: the higher patch number sits on the unpatched minor.
+  it("reads a higher patch on a lower minor as below the floor", () => {
+    expect(isAtLeast("16.2.12", "16.3.3")).toBe(false)
+    expect(isAtLeast("16.3.3", "16.3.3")).toBe(true)
+    expect(isAtLeast("16.3.4", "16.3.3")).toBe(true)
+  })
+
+  it("rejects the release immediately below each floor", () => {
+    expect(isAtLeast("0.35.3", "0.35.4")).toBe(false)
+    expect(isAtLeast("4.3.1", "4.3.2")).toBe(false)
+    expect(isAtLeast("4.28.6", "4.28.7")).toBe(false)
+  })
+})
+
+describe.each([
+  { name: "next", floor: "16.3.3", advisories: "GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4" },
+  { name: "sharp", floor: "0.35.4", advisories: "GHSA-rgj7-g3m4-5g8c" },
+  { name: "js-yaml", floor: "4.3.2", advisories: "GHSA-2883-xcg3-v3hh" },
+])("$name floor ($advisories)", ({ name, floor }) => {
+  // A rename or a dropped dependency would leave the version assertion below
+  // with nothing to iterate, passing while the floor went unchecked.
+  it("appears in the lockfile", () => {
+    expect(lockedVersionsOf(name).length).toBeGreaterThan(0)
+  })
+
+  it(`resolves every entry at or above ${floor}`, () => {
+    const belowFloor = lockedVersionsOf(name).filter((version) => !isAtLeast(version, floor))
+
+    expect(belowFloor).toEqual([])
   })
 })
