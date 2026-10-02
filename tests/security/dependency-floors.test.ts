@@ -107,6 +107,11 @@ describe("browserslist query cache (GHSA / Dependabot #79)", () => {
 // assertion, so these guard the comparison itself as well as the versions: the
 // mistake this PR started from was reading 16.2.12 as patched when the fix
 // landed in 16.3.3, which any comparison that stops at the patch number accepts.
+//
+// The October 2026 floors follow the same pattern: next moves to 16.3.6 for the
+// next/og ImageResponse RCE (not imported anywhere here, but the floor holds
+// regardless), and undici and brace-expansion are overrides on dev-only
+// transitives — undici via jsdom, brace-expansion via eslint's minimatch.
 // ----------------------------------------------------------------
 
 // Resolved from the cwd rather than from `import.meta.url`: the jsdom
@@ -148,13 +153,29 @@ describe("patched-release comparison", () => {
     expect(isAtLeast("0.35.3", "0.35.4")).toBe(false)
     expect(isAtLeast("4.3.1", "4.3.2")).toBe(false)
     expect(isAtLeast("4.28.6", "4.28.7")).toBe(false)
+    expect(isAtLeast("16.3.5", "16.3.6")).toBe(false)
+    expect(isAtLeast("7.29.0", "7.29.1")).toBe(false)
+    expect(isAtLeast("1.1.20", "1.1.21")).toBe(false)
+    expect(isAtLeast("5.0.11", "5.0.12")).toBe(false)
   })
 })
 
 describe.each([
-  { name: "next", floor: "16.3.3", advisories: "GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4" },
+  // 16.3.3 closed GHSA-p293-qw3h-jr36 and GHSA-2xp9-vwfh-vxw4; 16.3.6 raised the
+  // floor for GHSA-vcvr-r3jv-pc5j, which spans >=16.2.0 <16.3.6.
+  {
+    name: "next",
+    floor: "16.3.6",
+    advisories: "GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4, GHSA-vcvr-r3jv-pc5j",
+  },
   { name: "sharp", floor: "0.35.4", advisories: "GHSA-rgj7-g3m4-5g8c" },
   { name: "js-yaml", floor: "4.3.2", advisories: "GHSA-2883-xcg3-v3hh" },
+  {
+    name: "undici",
+    floor: "7.29.1",
+    advisories:
+      "GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3, GHSA-3wwx-pv8p-q78v, GHSA-pmjh-fq2x-6v4x, GHSA-3xpg-4rpp-hhhm, GHSA-2jfj-6hjv-fm6j, GHSA-rx4f-c7p8-82vq, GHSA-r53p-7pc4-xj5r, GHSA-2gqq-gqf2-x968, GHSA-8436-99hf-9mmv",
+  },
 ])("$name floor ($advisories)", ({ name, floor }) => {
   // A rename or a dropped dependency would leave the version assertion below
   // with nothing to iterate, passing while the floor went unchecked.
@@ -164,6 +185,40 @@ describe.each([
 
   it(`resolves every entry at or above ${floor}`, () => {
     const belowFloor = lockedVersionsOf(name).filter((version) => !isAtLeast(version, floor))
+
+    expect(belowFloor).toEqual([])
+  })
+})
+
+// ----------------------------------------------------------------
+// brace-expansion is the one floor that cannot be a single version. eslint's
+// minimatch resolves the 1.x line and typescript-estree's resolves 5.x, and
+// GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 and GHSA-6j4f-fj2g-mc7p were each
+// patched separately on every maintained major. Comparing 1.1.21 against a 5.x
+// floor would always fail, and comparing 5.0.9 against a 1.x floor would always
+// pass, so each entry is held to the floor of its own major.
+// ----------------------------------------------------------------
+
+const braceExpansionFloors: Record<number, string> = {
+  1: "1.1.21",
+  2: "2.1.7",
+  3: "3.0.9",
+  5: "5.0.12",
+}
+
+describe("brace-expansion floors (GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p)", () => {
+  it("appears in the lockfile", () => {
+    expect(lockedVersionsOf("brace-expansion").length).toBeGreaterThan(0)
+  })
+
+  it("resolves every entry at or above the floor for its major", () => {
+    // 4.x has no patched release at all, and a major newer than 5 has not been
+    // assessed, so an entry with no floor fails rather than passing unchecked.
+    const belowFloor = lockedVersionsOf("brace-expansion").filter((version) => {
+      const floor = braceExpansionFloors[Number(version.split(".")[0])]
+
+      return floor === undefined || !isAtLeast(version, floor)
+    })
 
     expect(belowFloor).toEqual([])
   })
