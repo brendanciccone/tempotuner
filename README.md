@@ -53,7 +53,7 @@ app/          Next.js page, layout, manifest and sitemap
 components/   Tuner, tap tempo, metronome and UI primitives
 hooks/        useTuner
 utils/        Pitch detection, FFT, note math, metronome timing
-tests/        Unit (194) and security (19) tests
+tests/        Unit (195) and security (19) tests
 ```
 
 ## License

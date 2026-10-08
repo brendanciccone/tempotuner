@@ -134,38 +134,40 @@ export default function TapTempo() {
   // no pointer event at all.
   const pointerTapPendingRef = useRef(false)
 
-  // A touch that has landed on the pad but is not yet known to be a press.
-  const pendingTouchRef = useRef<{ pointerId: number; time: number } | null>(null)
+  // A finger or stylus that has landed on the pad but is not yet known to be
+  // a press rather than the start of a scroll.
+  const pendingPressRef = useRef<{ pointerId: number; time: number } | null>(null)
 
   // A pointer tap is timed from the moment the finger or button goes down —
   // the musical hit — not from release, which would add however long each
-  // press was held to every interval. A mouse or pen press is a tap at once.
-  // A touch is not yet: the browser has still to decide whether the finger is
-  // starting a scroll or a pinch, so the touch is held until pointerup and
-  // committed with its press time, or dropped on pointercancel, which is what
-  // the browser sends when it takes the touch over. Counting it on pointerdown
-  // read a swipe that began on the pad as a beat.
+  // press was held to every interval. A mouse press is a tap at once. A
+  // finger or stylus (Apple Pencil, S Pen) is not yet: the browser has still
+  // to decide whether it is starting a scroll or a pinch, so the press is held
+  // until pointerup and committed with its press time, or dropped on
+  // pointercancel, which is what the browser sends when it takes the pointer
+  // over. Counting it on pointerdown read a swipe that began on the pad as a
+  // beat.
   const handlePadPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return
     pointerTapPendingRef.current = true
-    if (e.pointerType === "touch") {
-      pendingTouchRef.current = { pointerId: e.pointerId, time: Date.now() }
+    if (e.pointerType === "touch" || e.pointerType === "pen") {
+      pendingPressRef.current = { pointerId: e.pointerId, time: Date.now() }
       return
     }
     handleTap()
   }
 
   const handlePadPointerUp = (e: PointerEvent<HTMLButtonElement>) => {
-    const pending = pendingTouchRef.current
+    const pending = pendingPressRef.current
     if (!pending || pending.pointerId !== e.pointerId) return
-    pendingTouchRef.current = null
+    pendingPressRef.current = null
     handleTap(pending.time)
   }
 
   const handlePadPointerCancel = (e: PointerEvent<HTMLButtonElement>) => {
     pointerTapPendingRef.current = false
-    if (pendingTouchRef.current?.pointerId === e.pointerId) {
-      pendingTouchRef.current = null
+    if (pendingPressRef.current?.pointerId === e.pointerId) {
+      pendingPressRef.current = null
     }
   }
 
