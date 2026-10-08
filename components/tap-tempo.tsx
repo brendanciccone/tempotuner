@@ -56,8 +56,9 @@ export default function TapTempo() {
     return Math.round(60000 / averageInterval)
   }, [])
 
-  const handleTap = useCallback(() => {
-    const now = Date.now()
+  // `now` is when the tap happened, which for a touch is when the finger
+  // landed rather than when this runs.
+  const handleTap = useCallback((now: number = Date.now()) => {
 
     // If it's been more than 2 seconds since last tap, reset
     if (taps.length > 0 && now - taps[taps.length - 1] > 2000) {
@@ -133,18 +134,39 @@ export default function TapTempo() {
   // no pointer event at all.
   const pointerTapPendingRef = useRef(false)
 
-  // A pointer tap counts the moment the finger or button goes down — the
-  // musical hit — rather than on release, which adds however long each press
-  // was held to every interval. On a phone a click can also be cancelled
-  // outright when the finger drifts a few pixels, dropping the tap.
+  // A touch that has landed on the pad but is not yet known to be a press.
+  const pendingTouchRef = useRef<{ pointerId: number; time: number } | null>(null)
+
+  // A pointer tap is timed from the moment the finger or button goes down —
+  // the musical hit — not from release, which would add however long each
+  // press was held to every interval. A mouse or pen press is a tap at once.
+  // A touch is not yet: the browser has still to decide whether the finger is
+  // starting a scroll or a pinch, so the touch is held until pointerup and
+  // committed with its press time, or dropped on pointercancel, which is what
+  // the browser sends when it takes the touch over. Counting it on pointerdown
+  // read a swipe that began on the pad as a beat.
   const handlePadPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return
     pointerTapPendingRef.current = true
+    if (e.pointerType === "touch") {
+      pendingTouchRef.current = { pointerId: e.pointerId, time: Date.now() }
+      return
+    }
     handleTap()
   }
 
-  const handlePadPointerCancel = () => {
+  const handlePadPointerUp = (e: PointerEvent<HTMLButtonElement>) => {
+    const pending = pendingTouchRef.current
+    if (!pending || pending.pointerId !== e.pointerId) return
+    pendingTouchRef.current = null
+    handleTap(pending.time)
+  }
+
+  const handlePadPointerCancel = (e: PointerEvent<HTMLButtonElement>) => {
     pointerTapPendingRef.current = false
+    if (pendingTouchRef.current?.pointerId === e.pointerId) {
+      pendingTouchRef.current = null
+    }
   }
 
   // Keyboard and assistive-tech activation arrive as a click with no pointer
@@ -201,17 +223,14 @@ export default function TapTempo() {
           <button
             type="button"
             className={cn(
-              // touch-none: a touch on the pad is always a press, never the
-              // start of a scroll or pinch. Taps count on pointerdown, before a
-              // browser decides a touch is a pan, so without it a swipe that
-              // began here was read as a beat.
-              "ac-lamp w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-left text-xl uppercase tracking-display cursor-pointer select-none touch-none",
+              "ac-lamp w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-left text-xl uppercase tracking-display cursor-pointer select-none",
               isLit
                 ? "bg-fill text-on-fill border-fill box-glow"
                 : "bg-transparent text-ink border-stroke text-glow",
               "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
             )}
             onPointerDown={handlePadPointerDown}
+            onPointerUp={handlePadPointerUp}
             onPointerCancel={handlePadPointerCancel}
             onClick={handlePadClick}
             onKeyDown={handlePadKeyDown}

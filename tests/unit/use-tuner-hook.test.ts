@@ -258,6 +258,34 @@ describe("useTuner", () => {
     unmount()
   })
 
+  it("shows a slightly flat A0, the lowest note the tuner reads", async () => {
+    // Regression: the hook dropped anything at or below exactly 27.5Hz, so
+    // the bottom piano key read as nothing the moment it went flat.
+    const sampleRate = 44100
+    const frequency = 27.5 * 2 ** (-10 / 1200)
+    mockGetFloatTimeDomainData.mockImplementation((buffer: Float32Array) => {
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        buffer[i] =
+          0.4 * Math.sin(2 * Math.PI * frequency * t) +
+          0.2 * Math.sin(2 * Math.PI * 2 * frequency * t) +
+          0.1 * Math.sin(2 * Math.PI * 3 * frequency * t)
+      }
+    })
+
+    const { result, unmount } = renderHook(() => useTuner())
+
+    await waitFor(
+      () => {
+        expect(result.current[0].currentNoteWithoutOctave).toBe("A")
+      },
+      { timeout: 3000 },
+    )
+    expect(result.current[0].tuningStatus).toBe("flat")
+
+    unmount()
+  })
+
   it("unmount stops the underlying media-stream tracks", async () => {
     const { result, unmount } = renderHook(() => useTuner())
 

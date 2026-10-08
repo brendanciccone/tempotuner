@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { AudioAnalyzer } from "@/utils/audio-analyzer"
 import { NoteDetector } from "@/utils/note-detector"
-import { getRMS, MIN_FREQUENCY, MAX_FREQUENCY } from "@/utils/audio-processing"
+import { getRMS, MAX_FREQUENCY, PITCH_SEARCH_FLOOR } from "@/utils/audio-processing"
 import { DEFAULT_A4_FREQ } from "@/utils/note-utils"
 
 // Timing constants
@@ -134,7 +134,9 @@ export function useTuner(): [TunerState, TunerActions] {
 
       const frequency = audioAnalyzerRef.current.detectPitch(buffer)
 
-      if (frequency > MIN_FREQUENCY && frequency < MAX_FREQUENCY) {
+      // The floor is half a semitone under A0, not A0 itself: a flat A0 is
+      // still A0, and cutting at exactly 27.5Hz dropped it.
+      if (frequency >= PITCH_SEARCH_FLOOR && frequency < MAX_FREQUENCY) {
         const noteInfo = noteDetectorRef.current.detectNote(
           frequency,
           referenceFreqRef.current,

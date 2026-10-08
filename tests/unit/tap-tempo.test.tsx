@@ -111,9 +111,9 @@ describe("tap tempo keyboard input", () => {
     expect(getBpm()).toBe("120")
   })
 
-  it("still taps when a press is cancelled before its click", () => {
-    // On a phone the click is dropped when the finger drifts a few pixels; the
-    // pointerdown has already counted, so the tap is not lost.
+  it("counts a mouse or pen press even when its click never arrives", () => {
+    // A mouse press dragged off the pad before release gets no click; it was
+    // already counted on pointerdown, which is the moment of the hit.
     render(<TapTempo />)
     const pad = screen.getByRole("button", { name: /tap to set tempo/i })
 
@@ -152,16 +152,47 @@ describe("tap tempo keyboard input", () => {
     expect(getBpm()).toBe("120")
   })
 
-  it("keeps the pad from becoming a scroll or zoom gesture on touch screens", () => {
-    // Taps count on pointerdown, which a touch sends before the browser decides
-    // whether the finger is panning. A swipe that started on the pad counted
-    // as a tap — and more than 2s after the last one, it cleared the reading
-    // and sent a running metronome back to 120. touch-action: none makes every
-    // touch on the pad a press; the page still scrolls from everywhere else.
+  it("does not tap when a touch on the pad turns into a scroll", () => {
+    // Regression: taps counted on pointerdown, which a touch sends before the
+    // browser knows whether the finger is panning. A swipe that started on
+    // the pad was a beat — and more than 2s after the last one it cleared the
+    // reading and sent a running metronome back to 120. When the browser
+    // takes a touch over for a pan or pinch it sends pointercancel instead of
+    // pointerup, and the press is dropped.
     render(<TapTempo />)
     const pad = screen.getByRole("button", { name: /tap to set tempo/i })
 
-    expect(pad).toHaveClass("touch-none")
+    pressFourTimes(() => {
+      fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+      fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+      fireEvent.click(pad, { detail: 1 })
+    })
+    expect(getBpm()).toBe("120")
+
+    vi.advanceTimersByTime(3000)
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 2 })
+    fireEvent.pointerCancel(pad, { pointerType: "touch", pointerId: 2 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("times a touch tap from when the finger lands, not when it lifts", () => {
+    // The tap is committed on release (only then is it known not to be a
+    // scroll) but stamped with the press time, so hold length stays out of
+    // the interval: timing the releases here would read 105 BPM.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    const holdTimes = [40, 180, 90, 260]
+    holdTimes.forEach((hold, i) => {
+      fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: i + 1 })
+      vi.advanceTimersByTime(hold)
+      fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: i + 1 })
+      fireEvent.click(pad, { detail: 1 })
+      if (i < holdTimes.length - 1) vi.advanceTimersByTime(500 - hold)
+    })
+
+    expect(getBpm()).toBe("120")
   })
 
   it("does not repeat taps while Enter is held on the focused pad", () => {

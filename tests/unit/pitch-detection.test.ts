@@ -5,6 +5,7 @@ import {
   detectPitchYIN,
   differenceFunction,
   MIN_FREQUENCY,
+  PITCH_SEARCH_FLOOR,
 } from "@/utils/audio-processing"
 
 // ----------------------------------------------------------------
@@ -277,6 +278,26 @@ describe("detectPitchYIN at high device rates", () => {
     const rate = 192000
     const detected = detectPitchYIN(tone(frequency, { sampleRate: rate, length: analysisFrameSize(rate) }), rate)
     expect(Math.abs(centsBetween(detected, frequency))).toBeLessThan(1)
+  })
+
+  it.each([44100, 48000, 96000, 192000])("reads A0 in tune and 10 cents flat at %s Hz", (rate) => {
+    // Regression: the lag search stopped at A0's own period, so A0 always
+    // landed on the edge of the window, which the edge guard rejects. The
+    // search now runs down to half a semitone below A0.
+    for (const centsOff of [0, -10]) {
+      const frequency = MIN_FREQUENCY * 2 ** (centsOff / 1200)
+      const detected = detectPitchYIN(
+        tone(frequency, { sampleRate: rate, length: analysisFrameSize(rate), harmonics: [0.5, 0.3] }),
+        rate,
+      )
+      expect(Math.abs(centsBetween(detected, frequency))).toBeLessThan(1)
+    }
+  })
+
+  it("searches down to the G#0/A0 boundary and no further", () => {
+    expect(centsBetween(PITCH_SEARCH_FLOOR, MIN_FREQUENCY)).toBeCloseTo(-50, 6)
+    // G#0 is out of range: it must not come back as a wrong in-range note.
+    expect(detectPitchYIN(tone(25.96, { sampleRate: 48000, length: analysisFrameSize(48000) }), 48000)).toBe(0)
   })
 
   it("reports no pitch rather than a wrong note when the period is longer than the frame can hold", () => {

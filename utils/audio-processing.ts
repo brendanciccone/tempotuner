@@ -4,6 +4,15 @@ import { fftInPlace, nextPowerOfTwo } from "@/utils/fft"
 export const SIGNAL_THRESHOLD = 0.02 // Minimum RMS level to consider as signal (raised to reduce false triggers from background noise)
 export const MIN_FREQUENCY = 27.5 // A0 - lowest piano note
 export const MAX_FREQUENCY = 4186.0 // C8 - highest piano note
+/**
+ * The lowest frequency the detector searches down to: half a semitone below
+ * A0, the boundary between G#0 and A0. Searching only to A0 itself left A0's
+ * own period on the last lag examined — the true period, sampleRate / 27.5, is
+ * never a whole number of samples — where the edge guard rejects it, so an
+ * in-tune or flat A0 read as nothing.
+ */
+export const PITCH_SEARCH_FLOOR = MIN_FREQUENCY * 2 ** (-50 / 1200)
+
 export const FREQUENCY_BUFFER_SIZE = 9 // Median filter buffer (odd number for true median, larger = more stable)
 
 // AnalyserNode accepts frames of 32 to 32768 samples. 8192 is the floor this
@@ -11,6 +20,9 @@ export const FREQUENCY_BUFFER_SIZE = 9 // Median filter buffer (odd number for t
 // the YIN sum enough samples at low lags.
 const MIN_ANALYSIS_FRAME = 8192
 const MAX_ANALYSIS_FRAME = 32768
+
+/** The longest lag the detector examines at a sample rate, in samples. */
+const longestLag = (sampleRate: number): number => Math.ceil(sampleRate / PITCH_SEARCH_FLOOR) + 2
 
 // Pre-allocated work buffers, reused every frame. The tuner analyses ~28 frames
 // a second, so allocating these per call would be steady GC pressure.
@@ -51,7 +63,7 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
   // Only lags inside the instrument range are ever examined, so the
   // difference function is computed for those and no further.
   const tauMin = Math.max(2, Math.floor(sampleRate / MAX_FREQUENCY))
-  const tauMax = Math.min(halfSize - 1, Math.floor(sampleRate / MIN_FREQUENCY))
+  const tauMax = Math.min(halfSize - 1, longestLag(sampleRate))
   if (tauMax <= tauMin) {
     return 0
   }
@@ -123,8 +135,9 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
   }
 
   // A minimum on the last lag searched is the edge of the window, not a
-  // period: the true period is longer than this frame can hold, and reporting
-  // the edge would show a confident wrong note (an E1 read as F#1).
+  // period: the true period is below the search floor, or (at rates the frame
+  // cannot keep up with) longer than the frame can hold. Reporting the edge
+  // would show a confident wrong note — an E1 read as F#1.
   if (bestTau >= tauMax - 1) {
     return 0
   }
@@ -145,7 +158,7 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
  * The analysis frame for a device sample rate, in samples.
  *
  * YIN only finds periods shorter than half the frame, so the frame has to hold
- * two periods of the lowest note the tuner reads. The AudioContext runs at the
+ * two of the longest period the detector searches (see PITCH_SEARCH_FLOOR). The AudioContext runs at the
  * device's own rate, and at 176.4/192kHz (pro interfaces, high-res DACs) the
  * fixed 8192-sample frame topped out at 46.9Hz — below that, a bass's low E
  * came back as the wrong note.
@@ -155,8 +168,7 @@ export const analysisFrameSize = (sampleRate: number): number => {
     throw new RangeError(`sampleRate must be a positive finite number, got ${sampleRate}`)
   }
 
-  const longestPeriod = Math.ceil(sampleRate / MIN_FREQUENCY)
-  const needed = nextPowerOfTwo(2 * (longestPeriod + 2))
+  const needed = nextPowerOfTwo(2 * (longestLag(sampleRate) + 2))
   return Math.min(MAX_ANALYSIS_FRAME, Math.max(MIN_ANALYSIS_FRAME, needed))
 }
 
