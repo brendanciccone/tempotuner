@@ -274,4 +274,29 @@ describe("useTuner", () => {
       expect(mockTrackStop).toHaveBeenCalled()
     })
   })
+
+  it("releases a microphone granted after the tuner unmounted", async () => {
+    // Regression: switching to the Tempo tab while the permission prompt was
+    // still open unmounted the tuner first and granted the mic second. The late
+    // stream was never stopped, so the recording indicator stayed on for the
+    // rest of the visit.
+    let grant: (stream: typeof mockStream) => void = () => {
+      throw new Error("getUserMedia was not called")
+    }
+    mockGetUserMedia.mockImplementation(
+      () => new Promise<typeof mockStream>((resolve) => (grant = resolve)),
+    )
+
+    const { unmount } = renderHook(() => useTuner())
+    await waitFor(() => expect(mockGetUserMedia).toHaveBeenCalled())
+
+    unmount()
+    await waitFor(() => expect(mockAudioContextClose).toHaveBeenCalled())
+    grant(mockStream)
+
+    await waitFor(() => {
+      expect(mockTrackStop).toHaveBeenCalledTimes(1)
+    })
+    expect(mockSourceConnect).not.toHaveBeenCalled()
+  })
 })

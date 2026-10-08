@@ -3,7 +3,11 @@ import {
   type BeatAccent,
   accentForBeat,
   beatPaintDelayMs,
+  clampMetronomeBpm,
   clickVoiceForAccent,
+  MAX_METRONOME_BPM,
+  MIN_METRONOME_BPM,
+  parseTimeSignature,
 } from "@/utils/metronome-timing"
 
 // ----------------------------------------------------------------
@@ -96,5 +100,59 @@ describe("beatPaintDelayMs", () => {
     // easier to reason about clamped.
     expect(beatPaintDelayMs(9.95, 10)).toBe(0)
     expect(beatPaintDelayMs(10, 10)).toBe(0)
+  })
+})
+
+// ----------------------------------------------------------------
+// Tempo range
+// ----------------------------------------------------------------
+
+describe("clampMetronomeBpm", () => {
+  it("rejects a non-finite tempo rather than scheduling against it", () => {
+    expect(() => clampMetronomeBpm(Number.NaN)).toThrow(RangeError)
+    expect(() => clampMetronomeBpm(Number.POSITIVE_INFINITY)).toThrow(RangeError)
+  })
+
+  it("holds a tap tempo outside the range at the nearest playable edge", () => {
+    expect(clampMetronomeBpm(300)).toBe(MAX_METRONOME_BPM)
+    expect(clampMetronomeBpm(12)).toBe(MIN_METRONOME_BPM)
+    expect(clampMetronomeBpm(0)).toBe(MIN_METRONOME_BPM)
+  })
+
+  it("passes a playable tempo through unchanged, edges included", () => {
+    expect(clampMetronomeBpm(MIN_METRONOME_BPM)).toBe(MIN_METRONOME_BPM)
+    expect(clampMetronomeBpm(97)).toBe(97)
+    expect(clampMetronomeBpm(MAX_METRONOME_BPM)).toBe(MAX_METRONOME_BPM)
+  })
+})
+
+// ----------------------------------------------------------------
+// Time signatures
+// ----------------------------------------------------------------
+
+describe("parseTimeSignature", () => {
+  it("rejects anything that is not N/M with positive integers", () => {
+    for (const bad of ["", "4", "4/", "/4", "0/4", "4/0", "a/b", "4/4/4", " 4/4", "-3/4", "2.5/4"]) {
+      expect(() => parseTimeSignature(bad), bad).toThrow(RangeError)
+    }
+  })
+
+  it("reads simple meters as one beat per numerator, not compound", () => {
+    expect(parseTimeSignature("2/4")).toEqual({ beatsPerMeasure: 2, isCompoundMeter: false })
+    expect(parseTimeSignature("3/4")).toEqual({ beatsPerMeasure: 3, isCompoundMeter: false })
+    expect(parseTimeSignature("4/4")).toEqual({ beatsPerMeasure: 4, isCompoundMeter: false })
+    expect(parseTimeSignature("5/4")).toEqual({ beatsPerMeasure: 5, isCompoundMeter: false })
+  })
+
+  it("marks 6/8, 9/8 and 12/8 as compound", () => {
+    expect(parseTimeSignature("6/8")).toEqual({ beatsPerMeasure: 6, isCompoundMeter: true })
+    expect(parseTimeSignature("9/8")).toEqual({ beatsPerMeasure: 9, isCompoundMeter: true })
+    expect(parseTimeSignature("12/8")).toEqual({ beatsPerMeasure: 12, isCompoundMeter: true })
+  })
+
+  it("leaves 7/8 and 3/8 uncompounded", () => {
+    // 7/8 is an odd meter, not threes; 3/8 is a single group of three.
+    expect(parseTimeSignature("7/8").isCompoundMeter).toBe(false)
+    expect(parseTimeSignature("3/8").isCompoundMeter).toBe(false)
   })
 })

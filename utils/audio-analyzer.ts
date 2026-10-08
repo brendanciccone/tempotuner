@@ -14,7 +14,9 @@ const NOISE_FLOOR_ALPHA = 0.05 // Slow EMA for ambient noise estimation
 const NOISE_FLOOR_MULTIPLIER = 3 // Signal must be N× above noise floor
 const NOISE_FLOOR_MIN = SIGNAL_THRESHOLD // Never go below the hard minimum
 
-const PREFERRED_SAMPLE_RATE = 44100
+// Only a fallback for getSampleRate() before a context exists; the context
+// itself always runs at the device's own rate (see createAudioContext).
+const FALLBACK_SAMPLE_RATE = 44100
 
 /**
  * Discriminated outcome of {@link AudioAnalyzer.initialize}.
@@ -24,8 +26,11 @@ const PREFERRED_SAMPLE_RATE = 44100
  * after `resume()` (typical on iOS Safari without a user gesture). The caller
  * should surface a "tap to start" UI that calls {@link AudioAnalyzer.resume}.
  * `error` carries an actionable message already shown to the user.
+ * `cancelled` means {@link AudioAnalyzer.cleanup} ran while initialisation was
+ * still waiting (typically on the permission prompt); anything acquired late
+ * has already been released and there is nothing to report.
  */
-export type InitResult = "success" | "needs-gesture" | "error"
+export type InitResult = "success" | "needs-gesture" | "error" | "cancelled"
 
 /**
  * Categorised failure reason. Used by {@link AudioAnalyzer} to map raw
@@ -72,7 +77,7 @@ const FAILURE_MESSAGES: Record<FailureReason, string> = {
  *
  * Browser compatibility:
  * - Falls back to getByteTimeDomainData when getFloatTimeDomainData is missing (older iOS Safari)
- * - Falls back to default sample rate if 44100 is rejected by the hardware (Firefox / Linux / some USB interfaces)
+ * - Runs the AudioContext at the device's own sample rate (Firefox refuses to connect a mic to any other)
  * - Falls back to `webkitAudioContext` when the unprefixed constructor is missing
  * - Handles AudioContext "interrupted" state (tab switch, lock screen on iOS)
  * - Surfaces a `needs-gesture` outcome when iOS Safari leaves the context suspended after resume()
@@ -111,6 +116,7 @@ export class AudioAnalyzer {
    * - "success" when the mic stream is live and the context is running
    * - "needs-gesture" when the context is still suspended (iOS Safari without user gesture)
    * - "error" when initialisation failed; an actionable message has been delivered via onError
+   * - "cancelled" when cleanup() ran before initialisation finished
    */
   async initialize(): Promise<InitResult> {
     // 1. Secure-context check — getUserMedia silently fails over plain HTTP
@@ -129,8 +135,12 @@ export class AudioAnalyzer {
       return "error"
     }
 
+    // The context this attempt runs against. cleanup() replaces it with null,
+    // which is how every await below tells that the attempt was abandoned.
+    let context: AudioContext | null = null
+
     try {
-      // 3. Create AudioContext with vendor-prefix fallback and sample-rate fallback
+      // 3. Create AudioContext with vendor-prefix fallback
       if (!this.audioContext) {
         const created = this.createAudioContext()
         if (!created) {
@@ -139,27 +149,38 @@ export class AudioAnalyzer {
         }
         this.audioContext = created
       }
+      context = this.audioContext
 
       // 4. Try to resume — handles "suspended" (initial) and "interrupted" (tab switch / lock screen)
       await this.tryResume()
+      if (this.audioContext !== context) return "cancelled"
 
       // 5. Request microphone with pitch-detection-friendly constraints
       if (!this.stream) {
-        this.stream = await navigator.mediaDevices.getUserMedia({
+        const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
           },
         })
+        // cleanup() can run while the permission prompt is open — the user
+        // switches to the Tempo tab without answering it. The grant arrives
+        // afterwards, and a stream kept from it would hold the microphone (and
+        // the browser's recording indicator) open with nothing to release it.
+        if (this.audioContext !== context) {
+          stream.getTracks().forEach((track) => track.stop())
+          return "cancelled"
+        }
+        this.stream = stream
       }
 
       // 6. Wire up the analyser
-      this.analyser = this.audioContext.createAnalyser()
+      this.analyser = context.createAnalyser()
       this.analyser.fftSize = this.FFT_SIZE
       this.analyser.smoothingTimeConstant = 0 // Low smoothing for responsive pitch tracking
 
-      this.source = this.audioContext.createMediaStreamSource(this.stream)
+      this.source = context.createMediaStreamSource(this.stream)
       this.source.connect(this.analyser)
 
       this.buffer = new Float32Array(this.analyser.fftSize)
@@ -186,6 +207,10 @@ export class AudioAnalyzer {
 
       return "success"
     } catch (err) {
+      // A refusal (or any failure) that lands after cleanup() belongs to an
+      // attempt nobody is waiting on; reporting it would put a stale error on
+      // whatever mounted next.
+      if (context !== null && this.audioContext !== context) return "cancelled"
       this.fail(this.classifyError(err), err)
       return "error"
     }
@@ -229,8 +254,15 @@ export class AudioAnalyzer {
   }
 
   /**
-   * Create an AudioContext, preferring 44100Hz to avoid iOS resampling artefacts
-   * but falling back to the device default if that rate is unsupported.
+   * Create an AudioContext at the device's own sample rate.
+   *
+   * No `sampleRate` is requested, on purpose. Firefox constructs a context at
+   * any rate it is asked for, but then refuses to connect a microphone stream
+   * to it unless the rate matches the device ("Connecting AudioNodes from
+   * AudioContexts with different sample-rate is currently not supported") — so
+   * asking for 44100Hz broke the tuner outright on the common 48kHz mic. YIN
+   * reads the context's actual rate, so nothing here depends on a fixed one,
+   * and leaving it to the device avoids resampling the input at all.
    */
   private createAudioContext(): AudioContext | null {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext
@@ -239,16 +271,13 @@ export class AudioAnalyzer {
       return null
     }
 
-    // Try preferred sample rate first
-    try {
-      return new AudioContextClass({ sampleRate: PREFERRED_SAMPLE_RATE })
-    } catch {
-      // Hardware doesn't support 44100 (some Firefox/Linux/USB combos) — fall back to default
-    }
-
     try {
       return new AudioContextClass()
-    } catch {
+    } catch (err) {
+      // The constructor throws when the platform cannot open an audio device
+      // (or has hit its context limit); that is reported as Web Audio being
+      // unavailable, with the underlying error logged for diagnosis.
+      console.error("AudioAnalyzer: AudioContext construction failed", err)
       return null
     }
   }
@@ -304,7 +333,7 @@ export class AudioAnalyzer {
    * Get the sample rate of the audio context (whatever the hardware actually gave us).
    */
   getSampleRate(): number {
-    return this.audioContext?.sampleRate || PREFERRED_SAMPLE_RATE
+    return this.audioContext?.sampleRate || FALLBACK_SAMPLE_RATE
   }
 
   /**

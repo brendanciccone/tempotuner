@@ -1,6 +1,7 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Silkscreen, VT323 } from "next/font/google"
+import { cn } from "@/lib/utils"
 import "./globals.css"
 
 // Both faces are bitmap: VT323 carries everything, Silkscreen is reserved for
@@ -22,7 +23,7 @@ const silkscreen = Silkscreen({
 export const metadata: Metadata = {
   metadataBase: new URL("https://tempotuner.fourpixels.workers.dev"),
   title: "Tuner, Metronome, and Tap Tempo | TempoTuner",
-  description: "Chromatic tuner for any instrument, meteronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
+  description: "Chromatic tuner for any instrument, metronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
   icons: {
     icon: [
       { url: '/favicon.ico' },
@@ -37,7 +38,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Tuner, Metronome, and Tap Tempo | TempoTuner",
-    description: "Chromatic tuner for any instrument, meteronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
+    description: "Chromatic tuner for any instrument, metronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
     type: "website",
     url: "https://tempotuner.fourpixels.workers.dev",
     siteName: "TempoTuner",
@@ -54,17 +55,20 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Tuner, Metronome, and Tap Tempo | TempoTuner",
-    description: "Chromatic tuner for any instrument, meteronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
+    description: "Chromatic tuner for any instrument, metronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times.",
     creator: "@tempotuner",
     images: ["/og-image.png"],
   }
 }
 
-export const viewport = {
+export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  scrollBehavior: 'auto',
   themeColor: '#000b04',
+  // The panel is dark and has no light variant, so the browser's own chrome —
+  // scrollbars, overscroll, the canvas before CSS loads — should be dark too
+  // rather than flashing white.
+  colorScheme: 'dark',
 };
 
 export default function RootLayout({
@@ -73,7 +77,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${vt323.variable} ${silkscreen.variable}`}>
+    // touch-manipulation turns off double-tap-to-zoom (pinch zoom still works):
+    // tapping a tempo or rapidly pressing +/− is exactly a double tap, and iOS
+    // Safari zoomed the page instead of registering the second press.
+    <html lang="en" className={cn(vt323.variable, silkscreen.variable, "touch-manipulation")}>
       <body>
         <div className="ac-screen">{children}</div>
         {/* The glass, a sibling of the frame rather than a child of it: Radix

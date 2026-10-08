@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, type MouseEvent, type PointerEvent } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Metronome } from "@/components/metronome"
 import { cn } from "@/lib/utils"
@@ -9,6 +9,25 @@ import { cn } from "@/lib/utils"
 // config, and inside the component it would be rebuilt every render and read by
 // an effect that does not list it as a dependency.
 const INTERACTIVE = "button, [role='button'], [role='tab'], a[href], input, select, textarea"
+
+// An open dropdown list owns every key — arrows, Enter, and letters for its
+// typeahead — so nothing typed into it is a tap.
+const OPEN_LIST = "[role='listbox']"
+
+/**
+ * Whether a key press can be a tap at all. Holding a key auto-repeats it ~30
+ * times a second (each repeat read as a tap, so a held key showed ~1800 BPM);
+ * a chord with Ctrl/Cmd/Alt is a shortcut; and Tab, Escape, the arrows and the
+ * other named keys move focus or drive the focused control. What is left is
+ * every printable key, Space and Enter.
+ */
+const isTapKey = (e: KeyboardEvent): boolean => {
+  if (e.repeat || e.isComposing) return false
+  if (e.ctrlKey || e.metaKey || e.altKey) return false
+  return e.key.length === 1 || e.key === "Enter"
+}
+
+const DEFAULT_BPM = 120
 
 export default function TapTempo() {
   const [taps, setTaps] = useState<number[]>([])
@@ -28,6 +47,9 @@ export default function TapTempo() {
 
     // Calculate average interval
     const averageInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length
+
+    // Two taps inside the same millisecond would read as Infinity BPM
+    if (averageInterval <= 0) return null
 
     // Convert to BPM (60000 ms in a minute)
     // No upper limit here - we want to calculate the exact BPM
@@ -66,8 +88,11 @@ export default function TapTempo() {
   // and the +/− tempo keys, both of which quietly corrupted the average.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isTapKey(e)) return
+
       const isActivationKey = e.key === "Enter" || e.code === "Space"
       const target = e.target instanceof Element ? e.target : null
+      if (target?.closest(OPEN_LIST)) return
       // The focused control owns this press — including the tap pad, whose
       // native click calls handleTap once on its own.
       if (isActivationKey && target?.closest(INTERACTIVE)) return
@@ -85,22 +110,38 @@ export default function TapTempo() {
     }
   }, [handleTap])
 
-  // Handle metronome state changes
-  const handleMetronomeStateChange = (playing: boolean, beat: number) => {
+  // Stable on purpose: the metronome reports through an effect keyed on this
+  // callback, so a new function every render re-ran that effect on every
+  // render — and while the downbeat was lit, each run restarted a 100ms flash
+  // that re-rendered this component, which re-ran the effect, for as long as
+  // the beat lasted.
+  const handleMetronomeStateChange = useCallback((playing: boolean, beat: number) => {
     setIsMetronomePlaying(playing)
     setCurrentBeat(beat)
+  }, [])
 
-    // Flash the pad on the downbeat. The metronome reports the beat that is
-    // sounding, zero-based, so the downbeat is 0 — it used to report the NEXT
-    // beat, which put this on 1 and lit the pad ahead of the click.
-    if (playing && beat === 0) {
-      setIsAnimating(true)
-      setTimeout(() => setIsAnimating(false), 100)
-    }
+  // The downbeat lights the pad, so the pad is the visual metronome too. The
+  // metronome reports the beat that is sounding, zero-based, so the downbeat
+  // is 0 — it used to report the NEXT beat, which lit the pad ahead of the
+  // click.
+  const isDownbeat = isMetronomePlaying && currentBeat === 0
+
+  // A pointer tap counts the moment the finger or button goes down — the
+  // musical hit — rather than on release, which adds however long each press
+  // was held to every interval. On a phone a click can also be cancelled
+  // outright when the finger drifts a few pixels, dropping the tap.
+  const handlePadPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return
+    handleTap()
   }
 
-  // The downbeat lights the pad, so the pad is the visual metronome too
-  const isDownbeat = isMetronomePlaying && currentBeat === 0
+  // Keyboard (and assistive-tech) activation arrives as a click with no
+  // pointer behind it, which browsers mark with detail 0. A pointer press has
+  // already tapped on pointerdown, so its trailing click is ignored.
+  const handlePadClick = (e: MouseEvent<HTMLButtonElement>) => {
+    if (e.detail !== 0) return
+    handleTap()
+  }
   const isLit = isAnimating || isDownbeat
 
   return (
@@ -142,7 +183,8 @@ export default function TapTempo() {
                 : "bg-transparent text-ink border-stroke text-glow",
               "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
             )}
-            onClick={handleTap}
+            onPointerDown={handlePadPointerDown}
+            onClick={handlePadClick}
             data-lit={isLit}
             aria-label="Tap to set tempo"
           >
@@ -152,7 +194,7 @@ export default function TapTempo() {
           {/* Metronome Section */}
           <div className="w-full">
             <Metronome
-              initialBpm={bpm || 120}
+              bpm={bpm ?? DEFAULT_BPM}
               onBpmChange={(newBpm) => {
                 // Set our tap tempo BPM without any limits
                 setBpm(newBpm)

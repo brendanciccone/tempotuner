@@ -14,8 +14,6 @@ const mockGetFloatTimeDomainData = vi.fn()
 
 interface MockOptions {
   state?: string
-  /** Throw on `new MockAudioContext({ sampleRate })` to simulate sample-rate rejection. */
-  rejectSampleRate?: boolean
 }
 
 const createMockAudioContext = (options: MockOptions = {}) => {
@@ -24,10 +22,7 @@ const createMockAudioContext = (options: MockOptions = {}) => {
     sampleRate = 44100
     resume = mockAudioContextResume
     close = mockAudioContextClose
-    constructor(opts?: AudioContextOptions) {
-      if (options.rejectSampleRate && opts && "sampleRate" in opts) {
-        throw new DOMException("Sample rate not supported", "NotSupportedError")
-      }
+    constructor() {
       this.state = options.state ?? "running"
     }
     createAnalyser = () => ({
@@ -219,30 +214,38 @@ describe("AudioAnalyzer", () => {
     expect(onError).toHaveBeenCalledWith(expect.stringMatching(/web audio is not available/i))
   })
 
-  it("falls back to default sample rate when 44100 is rejected", async () => {
-    let attempts = 0
-    class FallbackAudioContext {
+  it("creates the AudioContext at the device's own sample rate", async () => {
+    // Regression: the context was created with { sampleRate: 44100 }. Firefox
+    // accepts that, then refuses to connect a mic stream to a context whose
+    // rate differs from the device's — so on the common 48kHz mic the tuner
+    // failed with "Couldn't start the tuner". The constructor here records its
+    // options and the source node rejects a mismatched rate the way Firefox does.
+    const constructorOptions: (AudioContextOptions | undefined)[] = []
+    class DeviceRateAudioContext {
       state = "running"
-      sampleRate = 48000
+      sampleRate: number
       resume = mockAudioContextResume
       close = mockAudioContextClose
       constructor(opts?: AudioContextOptions) {
-        attempts++
-        if (opts && "sampleRate" in opts) {
-          throw new DOMException("Sample rate not supported", "NotSupportedError")
-        }
+        constructorOptions.push(opts)
+        this.sampleRate = opts?.sampleRate ?? 48000
       }
       createAnalyser = () => ({
         fftSize: 0,
         smoothingTimeConstant: 0,
         getFloatTimeDomainData: mockGetFloatTimeDomainData,
       })
-      createMediaStreamSource = () => ({
-        connect: mockSourceConnect,
-        disconnect: mockSourceDisconnect,
-      })
+      createMediaStreamSource = () => {
+        if (this.sampleRate !== 48000) {
+          throw new DOMException(
+            "Connecting AudioNodes from AudioContexts with different sample-rate is currently not supported.",
+            "NotSupportedError",
+          )
+        }
+        return { connect: mockSourceConnect, disconnect: mockSourceDisconnect }
+      }
     }
-    vi.stubGlobal("AudioContext", FallbackAudioContext)
+    vi.stubGlobal("AudioContext", DeviceRateAudioContext)
 
     const onError = vi.fn()
     const analyzer = new AudioAnalyzer(onError)
@@ -250,11 +253,100 @@ describe("AudioAnalyzer", () => {
     const result = await analyzer.initialize()
 
     expect(result).toBe("success")
-    expect(attempts).toBe(2) // first (rejected) + fallback (succeeded)
+    expect(constructorOptions).toHaveLength(1)
+    expect(constructorOptions[0]?.sampleRate).toBeUndefined()
     expect(analyzer.getSampleRate()).toBe(48000)
     expect(onError).not.toHaveBeenCalled()
 
     await analyzer.cleanup()
+  })
+
+  it("reports Web Audio as unavailable when the AudioContext constructor throws", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    class ThrowingAudioContext {
+      constructor() {
+        throw new DOMException("No audio device", "NotSupportedError")
+      }
+    }
+    vi.stubGlobal("AudioContext", ThrowingAudioContext)
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+
+    const result = await analyzer.initialize()
+
+    expect(result).toBe("error")
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/web audio is not available/i))
+    expect(mockGetUserMedia).not.toHaveBeenCalled()
+  })
+
+  it("releases a microphone granted after cleanup() and reports 'cancelled'", async () => {
+    // Regression: switching tabs while the permission prompt was open ran
+    // cleanup() before getUserMedia resolved. The late grant was then stored on
+    // a torn-down analyzer and never stopped, so the mic and the browser's
+    // recording indicator stayed on until the page was reloaded.
+    let grant: (stream: typeof mockStream) => void = () => {
+      throw new Error("getUserMedia was not called")
+    }
+    mockGetUserMedia.mockImplementation(
+      () => new Promise<typeof mockStream>((resolve) => (grant = resolve)),
+    )
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+    const pending = analyzer.initialize()
+    await vi.waitFor(() => expect(mockGetUserMedia).toHaveBeenCalled())
+
+    await analyzer.cleanup()
+    grant(mockStream)
+
+    expect(await pending).toBe("cancelled")
+    expect(mockTrackStop).toHaveBeenCalledTimes(1)
+    expect(mockSourceConnect).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it("reports a microphone refusal that arrives after cleanup() as 'cancelled', not an error", async () => {
+    // The prompt can be answered after the tuner is gone — or, under React
+    // StrictMode's remount, after a second analyzer has already started. A
+    // stale refusal reported through onError would land on that new mount.
+    let refuse: (err: DOMException) => void = () => {
+      throw new Error("getUserMedia was not called")
+    }
+    mockGetUserMedia.mockImplementation(
+      () => new Promise<typeof mockStream>((_, reject) => (refuse = reject)),
+    )
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+    const pending = analyzer.initialize()
+    await vi.waitFor(() => expect(mockGetUserMedia).toHaveBeenCalled())
+
+    await analyzer.cleanup()
+    refuse(new DOMException("Permission denied", "NotAllowedError"))
+
+    expect(await pending).toBe("cancelled")
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it("does not request the microphone when cleanup() runs during the initial resume", async () => {
+    let finishResume: () => void = () => {
+      throw new Error("resume was not called")
+    }
+    mockAudioContextResume.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishResume = resolve)),
+    )
+    vi.stubGlobal("AudioContext", createMockAudioContext({ state: "suspended" }))
+
+    const analyzer = new AudioAnalyzer(vi.fn())
+    const pending = analyzer.initialize()
+    await vi.waitFor(() => expect(mockAudioContextResume).toHaveBeenCalled())
+
+    await analyzer.cleanup()
+    finishResume()
+
+    expect(await pending).toBe("cancelled")
+    expect(mockGetUserMedia).not.toHaveBeenCalled()
   })
 
   it("returns 'needs-gesture' when the AudioContext stays suspended after resume()", async () => {
