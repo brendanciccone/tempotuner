@@ -152,7 +152,7 @@ describe("tap tempo keyboard input", () => {
     expect(getBpm()).toBe("120")
   })
 
-  it("does not tap when a touch on the pad turns into a scroll", () => {
+  it.each(["touch", "pen"])("does not tap when a %s press on the pad turns into a scroll", (pointerType) => {
     // Regression: taps counted on pointerdown, which a touch sends before the
     // browser knows whether the finger is panning. A swipe that started on
     // the pad was a beat — and more than 2s after the last one it cleared the
@@ -169,9 +169,10 @@ describe("tap tempo keyboard input", () => {
     })
     expect(getBpm()).toBe("120")
 
+    // A finger or a stylus (Apple Pencil, S Pen) can both start a scroll.
     vi.advanceTimersByTime(3000)
-    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 2 })
-    fireEvent.pointerCancel(pad, { pointerType: "touch", pointerId: 2 })
+    fireEvent.pointerDown(pad, { button: 0, pointerType, pointerId: 2 })
+    fireEvent.pointerCancel(pad, { pointerType, pointerId: 2 })
 
     expect(getBpm()).toBe("120")
   })
