@@ -1,4 +1,4 @@
-import { detectPitchYIN, SIGNAL_THRESHOLD } from "@/utils/audio-processing"
+import { analysisFrameSize, detectPitchYIN, SIGNAL_THRESHOLD } from "@/utils/audio-processing"
 
 // Augment Window so we can access the legacy webkit-prefixed AudioContext
 // constructor without a cast. Some older WebKit builds (and Safari versions
@@ -69,11 +69,9 @@ const FAILURE_MESSAGES: Record<FailureReason, string> = {
 /**
  * AudioAnalyzer class handles microphone input and pitch detection
  *
- * Uses FFT size of 8192 for good low-frequency resolution.
- * At 44100Hz sample rate:
- * - 8192 samples ≈ 186ms of audio
- * - Minimum detectable period = 4096 samples → ~10.8Hz
- * - Supports all standard instrument tuning ranges
+ * The analysis frame is sized from the device's sample rate (see
+ * analysisFrameSize): 8192 samples at 44.1–96kHz, larger at 176.4/192kHz, so
+ * the lowest note's period always fits in half a frame.
  *
  * Browser compatibility:
  * - Falls back to getByteTimeDomainData when getFloatTimeDomainData is missing (older iOS Safari)
@@ -97,13 +95,6 @@ export class AudioAnalyzer {
   // Adaptive noise floor
   private noiseFloor: number = SIGNAL_THRESHOLD
   private noiseFloorInitialized: boolean = false
-
-  // FFT size of 8192 provides better low-frequency accuracy:
-  // - At 44100Hz: 8192 samples ≈ 186ms of audio
-  // - Minimum detectable period = 4096 samples → ~10.8Hz
-  // - Much better accuracy for bass guitar/low piano (E2 = 82.4Hz)
-  // - The extra latency is offset by EMA smoothing in NoteDetector
-  private readonly FFT_SIZE = 8192
 
   constructor(onError: (message: string) => void) {
     this.onError = onError
@@ -177,7 +168,7 @@ export class AudioAnalyzer {
 
       // 6. Wire up the analyser
       this.analyser = context.createAnalyser()
-      this.analyser.fftSize = this.FFT_SIZE
+      this.analyser.fftSize = analysisFrameSize(context.sampleRate)
       this.analyser.smoothingTimeConstant = 0 // Low smoothing for responsive pitch tracking
 
       this.source = context.createMediaStreamSource(this.stream)

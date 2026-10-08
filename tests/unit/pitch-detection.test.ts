@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { fftInPlace, isPowerOfTwo, nextPowerOfTwo } from "@/utils/fft"
-import { detectPitchYIN, differenceFunction, MIN_FREQUENCY } from "@/utils/audio-processing"
+import {
+  analysisFrameSize,
+  detectPitchYIN,
+  differenceFunction,
+  MIN_FREQUENCY,
+} from "@/utils/audio-processing"
 
 // ----------------------------------------------------------------
 // Helpers
@@ -188,16 +193,30 @@ describe("detectPitchYIN", () => {
     expect(detectPitchYIN(seededNoise(FRAME, 0.5), SAMPLE_RATE)).toBe(0)
   })
 
-  // A C7 period is only ~21 samples, so the parabolic sub-sample fit leaves
-  // about two cents of error there; still well inside the ±5 cent in-tune band.
+  // C7 is the case that matters: its period is only ~21 samples, and the
+  // sub-sample fit used to run on the normalized curve, which left it 2 cents
+  // sharp. Refining on the raw difference function holds it under a cent.
   it.each([
-    ["E1 (bass low E)", 41.2, 1],
-    ["E2 (guitar low E)", 82.41, 1],
-    ["A4", 440, 1],
-    ["C7", 2093, 3],
-  ])("reads %s within %s cent(s)", (_, frequency, toleranceCents) => {
+    ["E1 (bass low E)", 41.2],
+    ["E2 (guitar low E)", 82.41],
+    ["A4", 440],
+    ["C7", 2093],
+  ])("reads %s within a cent", (_, frequency) => {
     const detected = detectPitchYIN(tone(frequency), SAMPLE_RATE)
-    expect(Math.abs(centsBetween(detected, frequency))).toBeLessThan(toleranceCents)
+    expect(Math.abs(centsBetween(detected, frequency))).toBeLessThan(1)
+  })
+
+  it.each([
+    ["A4", 440],
+    ["E5 (violin E)", 659.26],
+    ["E6", 1318.5],
+  ])("reads %s within a cent at a Bluetooth headset's 16kHz", (_, frequency) => {
+    // The context runs at the device rate, and a Bluetooth headset mic drops
+    // the device to 16kHz, where a short period spans only a few samples:
+    // E6 read 6 cents sharp before the refinement moved to the raw curve.
+    const rate = 16000
+    const detected = detectPitchYIN(tone(frequency, { sampleRate: rate, length: analysisFrameSize(rate) }), rate)
+    expect(Math.abs(centsBetween(detected, frequency))).toBeLessThan(1)
   })
 
   it("reads the fundamental of a harmonic-rich tone", () => {
@@ -210,5 +229,59 @@ describe("detectPitchYIN", () => {
     // most hardware, so detection cannot assume 44.1kHz.
     const detected = detectPitchYIN(tone(196, { sampleRate: 48000 }), 48000)
     expect(Math.abs(centsBetween(detected, 196))).toBeLessThan(1)
+  })
+})
+
+// ----------------------------------------------------------------
+// Frame size per device rate
+// ----------------------------------------------------------------
+
+describe("analysisFrameSize", () => {
+  it("rejects a sample rate that is not a positive finite number", () => {
+    expect(() => analysisFrameSize(0)).toThrow(RangeError)
+    expect(() => analysisFrameSize(-48000)).toThrow(RangeError)
+    expect(() => analysisFrameSize(Number.NaN)).toThrow(RangeError)
+    expect(() => analysisFrameSize(Number.POSITIVE_INFINITY)).toThrow(RangeError)
+  })
+
+  it("keeps the 8192-sample frame at common device rates", () => {
+    expect(analysisFrameSize(44100)).toBe(8192)
+    expect(analysisFrameSize(48000)).toBe(8192)
+    expect(analysisFrameSize(96000)).toBe(8192)
+  })
+
+  it("grows the frame at high rates so the lowest note's period still fits in half of it", () => {
+    for (const rate of [176400, 192000]) {
+      const frame = analysisFrameSize(rate)
+      expect(frame).toBe(16384)
+      expect(frame / 2).toBeGreaterThan(rate / MIN_FREQUENCY)
+    }
+  })
+
+  it("never exceeds AnalyserNode's 32768-sample maximum", () => {
+    expect(analysisFrameSize(384000)).toBe(32768)
+    expect(analysisFrameSize(768000)).toBe(32768)
+  })
+})
+
+describe("detectPitchYIN at high device rates", () => {
+  // Regression: the context now runs at the device rate, and pro interfaces
+  // and DACs run at 176.4/192kHz. A fixed 8192-sample frame holds lags only
+  // up to 4095 samples there — 46.9Hz at 192kHz — so a bass E1 read as F#1.
+  it.each([
+    ["B0 (5-string low B)", 30.87],
+    ["D1 (drop D)", 36.71],
+    ["E1 (bass low E)", 41.2],
+    ["E2 (guitar low E)", 82.41],
+  ])("reads %s within a cent at 192kHz with the frame sized for the rate", (_, frequency) => {
+    const rate = 192000
+    const detected = detectPitchYIN(tone(frequency, { sampleRate: rate, length: analysisFrameSize(rate) }), rate)
+    expect(Math.abs(centsBetween(detected, frequency))).toBeLessThan(1)
+  })
+
+  it("reports no pitch rather than a wrong note when the period is longer than the frame can hold", () => {
+    // An 8192-sample frame at 192kHz cannot contain an E1 period search; the
+    // best lag is the edge of the window, which is not a period.
+    expect(detectPitchYIN(tone(41.2, { sampleRate: 192000, length: 8192 }), 192000)).toBe(0)
   })
 })

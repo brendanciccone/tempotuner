@@ -31,15 +31,19 @@ class MockAudioContext {
   oscillators: MockOscillator[] = []
   options: AudioContextOptions | undefined
 
+  // State changes land asynchronously, as they do in Firefox and Safari: the
+  // `state` attribute keeps its old value until the queued operation runs.
   resume = vi.fn(() => {
     if (MockAudioContext.resumeError) return Promise.reject(MockAudioContext.resumeError)
-    this.state = "running"
-    return Promise.resolve()
+    return Promise.resolve().then(() => {
+      this.state = "running"
+    })
   })
-  suspend = vi.fn(() => {
-    this.state = "suspended"
-    return Promise.resolve()
-  })
+  suspend = vi.fn(() =>
+    Promise.resolve().then(() => {
+      this.state = "suspended"
+    }),
+  )
   close = vi.fn(() => {
     this.state = "closed"
     return Promise.resolve()
@@ -143,12 +147,24 @@ describe("metronome audio lifecycle", () => {
     expect(onlyContext().resume).toHaveBeenCalledTimes(1)
   })
 
-  it("does not resume a context that is already running", () => {
+  it("resumes on every start, even when the context still reports running", async () => {
+    // Regression: start skipped resume() whenever state read "running". In
+    // Firefox and Safari a stop's suspend() leaves state at "running" until it
+    // lands, so a quick stop-then-start skipped the resume, the suspend landed
+    // afterwards, and the panel showed Running with no sound.
     MockAudioContext.startState = "running"
     renderMetronome()
-    toggle()
 
-    expect(onlyContext().resume).not.toHaveBeenCalled()
+    toggle()
+    toggle()
+    toggle()
+    const context = onlyContext()
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(context.resume).toHaveBeenCalledTimes(2)
+    expect(context.state).toBe("running")
   })
 
   it("suspends the context on stop and resumes it on the next start", () => {
@@ -297,7 +313,9 @@ describe("metronome scheduling", () => {
 
     toggle()
 
-    context.oscillators.forEach((osc) => expect(osc.stop).toHaveBeenCalled())
+    // Every click was given a scheduled stop when it was queued; stop has to
+    // add an immediate one, or queued clicks still sound after a restart.
+    context.oscillators.forEach((osc) => expect(osc.stop).toHaveBeenLastCalledWith())
     const before = context.oscillators.length
     advanceClock(context, 2)
     expect(context.oscillators).toHaveLength(before)

@@ -327,14 +327,16 @@ export function Metronome({ bpm: displayBpm, onBpmChange, onStateChange }: Metro
 
     // resume() has to be called synchronously inside the click: Safari only
     // lets audio start from within a user gesture, and an await before this
-    // line would already be outside it.
-    if (audioContext.state !== "running") {
-      audioContext.resume().catch((err: unknown) => {
-        console.error("Failed to resume the metronome AudioContext:", err)
-        if (isPlayingRef.current) stopMetronome()
-        setAudioError(AUDIO_START_FAILED_MESSAGE)
-      })
-    }
+    // line would already be outside it. It is called unconditionally: Firefox
+    // and Safari keep reporting "running" until a stop's suspend() lands, so a
+    // quick stop-then-start that trusted `state` skipped the resume and was
+    // then frozen by that suspend. On a running context resume() is a no-op,
+    // and it queues behind any suspend still in flight.
+    audioContext.resume().catch((err: unknown) => {
+      console.error("Failed to resume the metronome AudioContext:", err)
+      if (isPlayingRef.current) stopMetronome()
+      setAudioError(AUDIO_START_FAILED_MESSAGE)
+    })
 
     // NO_BEAT rather than 0: the first click is START_DELAY_S out and its own
     // paint lights the downbeat when it sounds. A suspended context's clock

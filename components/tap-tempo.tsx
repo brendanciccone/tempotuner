@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, type MouseEvent, type PointerEvent } from "react"
+import { useState, useEffect, useCallback, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Metronome } from "@/components/metronome"
 import { cn } from "@/lib/utils"
@@ -88,8 +88,6 @@ export default function TapTempo() {
   // and the +/− tempo keys, both of which quietly corrupted the average.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isTapKey(e)) return
-
       const isActivationKey = e.key === "Enter" || e.code === "Space"
       const target = e.target instanceof Element ? e.target : null
       if (target?.closest(OPEN_LIST)) return
@@ -97,10 +95,13 @@ export default function TapTempo() {
       // native click calls handleTap once on its own.
       if (isActivationKey && target?.closest(INTERACTIVE)) return
 
-      // Prevent spacebar from scrolling the page
-      if (e.code === "Space") {
+      // Space would scroll the page. Cancelled before the tap filter, because
+      // a held Space auto-repeats and every repeat scrolls too, tap or not.
+      if (e.code === "Space" && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault()
       }
+
+      if (!isTapKey(e)) return
       handleTap()
     }
 
@@ -126,21 +127,44 @@ export default function TapTempo() {
   // click.
   const isDownbeat = isMetronomePlaying && currentBeat === 0
 
+  // Set when a pointer press has already tapped, so the click that trails it
+  // is not counted a second time. Deduping on click.detail instead dropped
+  // Firefox's assistive-tech activation, which clicks with detail 1 and sends
+  // no pointer event at all.
+  const pointerTapPendingRef = useRef(false)
+
   // A pointer tap counts the moment the finger or button goes down — the
   // musical hit — rather than on release, which adds however long each press
   // was held to every interval. On a phone a click can also be cancelled
   // outright when the finger drifts a few pixels, dropping the tap.
   const handlePadPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return
+    pointerTapPendingRef.current = true
     handleTap()
   }
 
-  // Keyboard (and assistive-tech) activation arrives as a click with no
-  // pointer behind it, which browsers mark with detail 0. A pointer press has
-  // already tapped on pointerdown, so its trailing click is ignored.
-  const handlePadClick = (e: MouseEvent<HTMLButtonElement>) => {
-    if (e.detail !== 0) return
+  const handlePadPointerCancel = () => {
+    pointerTapPendingRef.current = false
+  }
+
+  // Keyboard and assistive-tech activation arrive as a click with no pointer
+  // press behind it, and tap here; a pointer press's own click does not.
+  const handlePadClick = () => {
+    if (pointerTapPendingRef.current) {
+      pointerTapPendingRef.current = false
+      return
+    }
     handleTap()
+  }
+
+  const handlePadKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "Enter" && e.key !== " ") return
+    // The keyboard is activating the pad, so no pointer press is in flight; a
+    // press that was dragged off and never clicked must not swallow this one.
+    pointerTapPendingRef.current = false
+    // A held Enter makes the browser click the button again on every repeat,
+    // ~30 times a second. Cancelling the repeated keydown cancels that click.
+    if (e.repeat) e.preventDefault()
   }
   const isLit = isAnimating || isDownbeat
 
@@ -177,14 +201,20 @@ export default function TapTempo() {
           <button
             type="button"
             className={cn(
-              "ac-lamp w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-left text-xl uppercase tracking-display cursor-pointer select-none",
+              // touch-none: a touch on the pad is always a press, never the
+              // start of a scroll or pinch. Taps count on pointerdown, before a
+              // browser decides a touch is a pan, so without it a swipe that
+              // began here was read as a beat.
+              "ac-lamp w-full mb-6 min-h-[96px] flex items-start rounded-lg border-2 px-4 py-3 text-left text-xl uppercase tracking-display cursor-pointer select-none touch-none",
               isLit
                 ? "bg-fill text-on-fill border-fill box-glow"
                 : "bg-transparent text-ink border-stroke text-glow",
               "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
             )}
             onPointerDown={handlePadPointerDown}
+            onPointerCancel={handlePadPointerCancel}
             onClick={handlePadClick}
+            onKeyDown={handlePadKeyDown}
             data-lit={isLit}
             aria-label="Tap to set tempo"
           >

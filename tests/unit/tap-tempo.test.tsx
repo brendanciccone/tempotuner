@@ -122,6 +122,74 @@ describe("tap tempo keyboard input", () => {
     expect(getBpm()).toBe("120")
   })
 
+  it("counts an assistive-tech click that arrives without a pointer event", () => {
+    // Regression: Firefox's accessibility "press" (NVDA/JAWS browse mode,
+    // VoiceOver, TalkBack) sends mousedown, mouseup and a click with detail 1,
+    // but no pointerdown. Deduping on detail === 0 dropped every one of them.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    pressFourTimes(() => {
+      fireEvent.mouseDown(pad)
+      fireEvent.mouseUp(pad)
+      fireEvent.click(pad, { detail: 1 })
+    })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("does not let a pointer press that never clicked swallow the next keyboard tap", () => {
+    // A press that is dragged off the pad taps on pointerdown and then never
+    // gets its click; the next Enter on the pad must still count.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.pointerDown(pad, { button: 0 })
+    vi.advanceTimersByTime(500)
+    fireEvent.keyDown(pad, { key: "Enter", code: "Enter" })
+    fireEvent.click(pad, { detail: 0 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("keeps the pad from becoming a scroll or zoom gesture on touch screens", () => {
+    // Taps count on pointerdown, which a touch sends before the browser decides
+    // whether the finger is panning. A swipe that started on the pad counted
+    // as a tap — and more than 2s after the last one, it cleared the reading
+    // and sent a running metronome back to 120. touch-action: none makes every
+    // touch on the pad a press; the page still scrolls from everywhere else.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    expect(pad).toHaveClass("touch-none")
+  })
+
+  it("does not repeat taps while Enter is held on the focused pad", () => {
+    // The window listener skips auto-repeat, but on a focused button every
+    // repeated Enter is also turned into a click by the browser. Cancelling
+    // the repeated keydown is what stops that click.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+    pad.focus()
+
+    const notCancelled = fireEvent.keyDown(pad, { key: "Enter", code: "Enter", repeat: true })
+
+    expect(notCancelled).toBe(false)
+  })
+
+  it("does not scroll the page while Space is held", () => {
+    // Regression: the repeat filter returned before the Space preventDefault,
+    // so only the first keydown of a held Space was cancelled and the rest
+    // scrolled the page.
+    render(<TapTempo />)
+
+    fireEvent.keyDown(document.body, { key: " ", code: "Space" })
+    const repeatNotCancelled = fireEvent.keyDown(document.body, { key: " ", code: "Space", repeat: true })
+
+    expect(repeatNotCancelled).toBe(false)
+    expect(getBpm()).toBe("---")
+  })
+
   it("ignores secondary-button presses", () => {
     render(<TapTempo />)
     const pad = screen.getByRole("button", { name: /tap to set tempo/i })
