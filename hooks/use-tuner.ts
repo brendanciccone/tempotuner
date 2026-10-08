@@ -236,13 +236,11 @@ export function useTuner(): [TunerState, TunerActions] {
       noteDetectorRef.current = new NoteDetector()
     }
 
-    setError(null)
-    setNeedsUserGesture(false)
-    setIsInitializing(true)
-
     const result = await audioAnalyzerRef.current.initialize()
 
-    if (isUnmountedRef.current) return
+    // "cancelled": the analyzer was torn down mid-initialise, and whoever tore
+    // it down owns the state from here.
+    if (isUnmountedRef.current || result === "cancelled") return
 
     setIsInitializing(false)
 
@@ -284,6 +282,12 @@ export function useTuner(): [TunerState, TunerActions] {
     // create a new one (Web Audio spec: creation-blocking resources are only
     // released after close() resolves).
     await stopTuner()
+    // Reset here rather than inside initialise(): on mount these already hold
+    // their initial values, and setting them again from the mount effect is a
+    // synchronous setState-in-effect for nothing.
+    setError(null)
+    setNeedsUserGesture(false)
+    setIsInitializing(true)
     await initialise()
   }, [initialise, stopTuner])
 
