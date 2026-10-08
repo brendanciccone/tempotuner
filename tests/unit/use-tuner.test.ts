@@ -261,6 +261,30 @@ describe("AudioAnalyzer", () => {
     await analyzer.cleanup()
   })
 
+  it("sizes the analysis frame from the device rate", async () => {
+    // At 192kHz an 8192-sample frame cannot hold a bass E1 period; the
+    // analyser has to be given a frame sized for the rate the context got.
+    class HighRateAudioContext {
+      state = "running"
+      sampleRate = 192000
+      resume = mockAudioContextResume
+      close = mockAudioContextClose
+      createAnalyser = () => ({
+        fftSize: 0,
+        smoothingTimeConstant: 0,
+        getFloatTimeDomainData: mockGetFloatTimeDomainData,
+      })
+      createMediaStreamSource = () => ({ connect: mockSourceConnect, disconnect: mockSourceDisconnect })
+    }
+    vi.stubGlobal("AudioContext", HighRateAudioContext)
+
+    const analyzer = new AudioAnalyzer(vi.fn())
+    expect(await analyzer.initialize()).toBe("success")
+
+    expect(analyzer.getAudioData()?.length).toBe(16384)
+    await analyzer.cleanup()
+  })
+
   it("reports Web Audio as unavailable when the AudioContext constructor throws", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     class ThrowingAudioContext {
