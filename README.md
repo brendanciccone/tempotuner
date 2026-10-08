@@ -54,7 +54,7 @@ src/          Astro pages, layout, global styles and sitemap endpoint
 components/   Tuner, tap tempo, metronome and UI primitives
 hooks/        useTuner
 utils/        Pitch detection, FFT, note math, metronome timing
-tests/        Unit (195), integration (3) and security (21) tests
+tests/        Unit (202), integration (3) and security (21) tests
 ```
 
 ## License
