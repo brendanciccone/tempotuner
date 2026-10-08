@@ -65,3 +65,41 @@ export const beatPaintDelayMs = (scheduledTime: number, currentTime: number): nu
   // being pushed into the past.
   return Math.max(0, (scheduledTime - currentTime) * 1000)
 }
+
+/** The metronome's playable range. Tap tempo can read outside it. */
+export const MIN_METRONOME_BPM = 40
+export const MAX_METRONOME_BPM = 240
+
+/**
+ * The tempo the metronome actually plays for a requested BPM. Tap tempo can
+ * report anything — 300 BPM is a real reading — but the click is limited to
+ * the slider's range, so the two have to be kept apart rather than one
+ * silently overwriting the other.
+ */
+export const clampMetronomeBpm = (bpm: number): number => {
+  if (!Number.isFinite(bpm)) {
+    throw new RangeError(`bpm must be finite, got ${bpm}`)
+  }
+  return Math.min(Math.max(MIN_METRONOME_BPM, bpm), MAX_METRONOME_BPM)
+}
+
+export interface TimeSignatureInfo {
+  beatsPerMeasure: number
+  isCompoundMeter: boolean
+}
+
+/**
+ * Read "6/8"-style time signatures. Compound meters (6/8, 9/8, 12/8) group
+ * their beats in threes; 7/8 is not compound, it is an odd meter.
+ */
+export const parseTimeSignature = (signature: string): TimeSignatureInfo => {
+  const match = /^(\d+)\/(\d+)$/.exec(signature)
+  const beatsPerMeasure = match ? Number(match[1]) : Number.NaN
+  const noteValue = match ? Number(match[2]) : Number.NaN
+  if (!Number.isInteger(beatsPerMeasure) || beatsPerMeasure < 1 || !Number.isInteger(noteValue) || noteValue < 1) {
+    throw new RangeError(`time signature must look like "4/4", got "${signature}"`)
+  }
+
+  const isCompoundMeter = noteValue === 8 && beatsPerMeasure > 3 && beatsPerMeasure % 3 === 0
+  return { beatsPerMeasure, isCompoundMeter }
+}

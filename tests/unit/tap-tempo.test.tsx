@@ -91,13 +91,110 @@ describe("tap tempo keyboard input", () => {
     expect(getBpm()).toBe("120")
   })
 
-  it("counts one tap per pointer press", () => {
+  it("counts one tap per pointer press, on the press rather than the release", () => {
+    // A pointer press is pointerdown followed by a click (detail 1). Tapping on
+    // pointerdown times the hit, not however long the finger stayed down, and
+    // the trailing click must not count a second time.
     render(<TapTempo />)
     const pad = screen.getByRole("button", { name: /tap to set tempo/i })
 
-    pressFourTimes(() => fireEvent.click(pad))
+    // Presses land 500ms apart but are held for different lengths; timing the
+    // releases instead would read 105 BPM.
+    const holdTimes = [40, 180, 90, 260]
+    holdTimes.forEach((hold, i) => {
+      fireEvent.pointerDown(pad, { button: 0 })
+      vi.advanceTimersByTime(hold)
+      fireEvent.click(pad, { detail: 1 })
+      if (i < holdTimes.length - 1) vi.advanceTimersByTime(500 - hold)
+    })
 
     expect(getBpm()).toBe("120")
+  })
+
+  it("still taps when a press is cancelled before its click", () => {
+    // On a phone the click is dropped when the finger drifts a few pixels; the
+    // pointerdown has already counted, so the tap is not lost.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    pressFourTimes(() => fireEvent.pointerDown(pad, { button: 0 }))
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("ignores secondary-button presses", () => {
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    pressFourTimes(() => fireEvent.pointerDown(pad, { button: 2 }))
+
+    expect(getBpm()).toBe("---")
+  })
+
+  it("does not tap on key auto-repeat", () => {
+    // Regression: holding a key fires keydown ~30 times a second, and every
+    // repeat counted, reading ~1800 BPM.
+    render(<TapTempo />)
+
+    fireEvent.keyDown(document.body, { key: "q", code: "KeyQ" })
+    for (let i = 0; i < 10; i++) {
+      vi.advanceTimersByTime(33)
+      fireEvent.keyDown(document.body, { key: "q", code: "KeyQ", repeat: true })
+    }
+
+    expect(getBpm()).toBe("---")
+  })
+
+  it("does not tap on shortcuts or navigation keys", () => {
+    // Regression: Tab to move focus, Escape to close the dropdown, the arrows
+    // on the tempo slider and Cmd/Ctrl shortcuts all logged taps.
+    render(<TapTempo />)
+
+    const nonTaps = [
+      { key: "Tab", code: "Tab" },
+      { key: "Escape", code: "Escape" },
+      { key: "ArrowRight", code: "ArrowRight" },
+      { key: "Shift", code: "ShiftLeft" },
+      { key: "F5", code: "F5" },
+      { key: "c", code: "KeyC", metaKey: true },
+      { key: "r", code: "KeyR", ctrlKey: true },
+      { key: "q", code: "KeyQ", altKey: true },
+    ]
+    nonTaps.forEach((init) => {
+      fireEvent.keyDown(document.body, init)
+      vi.advanceTimersByTime(500)
+    })
+
+    expect(getBpm()).toBe("---")
+  })
+
+  it("taps on Space and Shift+letter from the page", () => {
+    render(<TapTempo />)
+
+    pressFourTimes(() => fireEvent.keyDown(document.body, { key: " ", code: "Space" }))
+    expect(getBpm()).toBe("120")
+
+    vi.advanceTimersByTime(2500)
+    pressFourTimes(() => fireEvent.keyDown(document.body, { key: "Q", code: "KeyQ", shiftKey: true }))
+    expect(getBpm()).toBe("120")
+  })
+
+  it("does not tap on keys typed into an open dropdown list", () => {
+    // Letters drive an open list's typeahead and Enter picks the option.
+    render(<TapTempo />)
+    const list = document.createElement("div")
+    list.setAttribute("role", "listbox")
+    const option = document.createElement("div")
+    option.setAttribute("role", "option")
+    option.tabIndex = -1
+    list.appendChild(option)
+    document.body.appendChild(list)
+
+    pressFourTimes(() => fireEvent.keyDown(option, { key: "6", code: "Digit6" }))
+    pressFourTimes(() => fireEvent.keyDown(option, { key: "Enter", code: "Enter" }))
+
+    expect(getBpm()).toBe("---")
+    list.remove()
   })
 
   it("restarts the average when taps are more than two seconds apart", () => {

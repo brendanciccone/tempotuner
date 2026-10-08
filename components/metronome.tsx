@@ -2,17 +2,26 @@
 
 import * as React from "react"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectGroup, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { BeatIndicator } from "@/components/beat-indicator"
 import { cn } from "@/lib/utils"
-import { accentForBeat, beatPaintDelayMs, clickVoiceForAccent } from "@/utils/metronome-timing"
+import {
+  accentForBeat,
+  beatPaintDelayMs,
+  clampMetronomeBpm,
+  clickVoiceForAccent,
+  MAX_METRONOME_BPM,
+  MIN_METRONOME_BPM,
+  parseTimeSignature,
+} from "@/utils/metronome-timing"
 
 interface MetronomeProps {
-  initialBpm: number
+  /** The tempo on the panel. Can sit outside the playable range (tap tempo). */
+  bpm: number
   onBpmChange: (bpm: number) => void
   onStateChange?: (isPlaying: boolean, currentBeat: number) => void
 }
@@ -25,6 +34,24 @@ interface MetronomeProps {
  */
 const NO_BEAT = -1
 
+/** Delay from pressing start to the first click, in seconds. */
+const START_DELAY_S = 0.1
+
+/**
+ * How far ahead of the AudioContext clock clicks are scheduled, in seconds.
+ * In the foreground 100ms keeps tempo changes feeling immediate. A hidden tab
+ * can have its timers throttled to about once a second, which would leave
+ * holes in a 100ms queue, so while hidden the queue is deep enough to bridge
+ * the gap. Clicks are sample-accurate either way; only how far ahead of time
+ * they are committed changes.
+ */
+const SCHEDULE_AHEAD_S = 0.1
+const HIDDEN_SCHEDULE_AHEAD_S = 1.5
+const SCHEDULER_INTERVAL_MS = 15
+
+const AUDIO_UNAVAILABLE_MESSAGE = "Audio output is not available in this browser."
+const AUDIO_START_FAILED_MESSAGE = "Couldn't start audio. Tap the metronome again to retry."
+
 /**
  * Web Audio raises InvalidStateError for the routine "this node or context is
  * already in the state you are asking for" cases — stopping an oscillator that
@@ -34,6 +61,29 @@ const NO_BEAT = -1
  */
 const isAlreadyInTargetState = (err: unknown): boolean =>
   err instanceof DOMException && err.name === "InvalidStateError"
+
+// Audio Session API (Safari 16.4+), not yet in TypeScript's DOM typings.
+// https://developer.mozilla.org/docs/Web/API/AudioSession
+type AudioSessionType = "auto" | "playback" | "transient" | "transient-solo" | "ambient" | "play-and-record"
+declare global {
+  interface Navigator {
+    audioSession?: { type: AudioSessionType }
+  }
+}
+
+/**
+ * Safari maps Web Audio to the system's "ambient" category, which the iPhone's
+ * ring/silent switch mutes — so with the phone on silent the metronome ran
+ * with no sound at all. Declaring "playback" while it runs is how a page tells
+ * WebKit this is media rather than an incidental sound effect. Like any media
+ * app, that pauses other audio on the device while the click is running; the
+ * session goes back to "auto" on stop. Other browsers lack the API and are
+ * unaffected.
+ */
+const setAudioSessionType = (type: AudioSessionType): void => {
+  if (typeof navigator === "undefined" || !navigator.audioSession) return
+  navigator.audioSession.type = type
+}
 
 // Custom SelectItem with the selection marker on the right
 const CustomSelectItem = React.forwardRef<
@@ -59,17 +109,23 @@ const CustomSelectItem = React.forwardRef<
 ))
 CustomSelectItem.displayName = SelectPrimitive.Item.displayName
 
-export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeProps) {
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [bpm, setBpm] = useState(initialBpm || 120)
-  const [currentBeat, setCurrentBeat] = useState(NO_BEAT)
-  const [timeSignature, setTimeSignature] = useState("4/4")
-  const [beatsPerMeasure, setBeatsPerMeasure] = useState(4)
-  const [isNotesExpanded, setIsNotesExpanded] = useState(false)
-  const [isCompoundMeter, setIsCompoundMeter] = useState(false)
-  const [displayBpm, setDisplayBpm] = useState(initialBpm || 120)
+const DEFAULT_TIME_SIGNATURE = "4/4"
 
-  // Refs for audio processing
+export function Metronome({ bpm: displayBpm, onBpmChange, onStateChange }: MetronomeProps) {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentBeat, setCurrentBeat] = useState(NO_BEAT)
+  const [timeSignature, setTimeSignature] = useState(DEFAULT_TIME_SIGNATURE)
+  const [isNotesExpanded, setIsNotesExpanded] = useState(false)
+  const [audioError, setAudioError] = useState<string | null>(null)
+
+  // Derived, not stored: tap tempo can report any BPM, the click plays the
+  // nearest one in range, and the delay table below keeps the exact reading.
+  const bpm = clampMetronomeBpm(displayBpm)
+  const { beatsPerMeasure, isCompoundMeter } = parseTimeSignature(timeSignature)
+
+  // Refs for audio processing. One AudioContext for the component's lifetime:
+  // it is created on the first start (inside the click, where browsers allow
+  // audio to begin), suspended on stop and resumed on the next start.
   const audioContextRef = useRef<AudioContext | null>(null)
   const nextNoteTimeRef = useRef<number>(0)
   const timerIDRef = useRef<number | null>(null)
@@ -82,7 +138,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   // value it reads has to come from a ref: the state it captured belongs to the
   // render that started it. Compound accents were the one that got missed —
   // switching 4/4 to 6/8 mid-run kept clicking flat until you stopped.
-  const isCompoundMeterRef = useRef<boolean>(false)
+  const isCompoundMeterRef = useRef<boolean>(isCompoundMeter)
   // Beat paints are queued ahead of time, so they have to be cancellable: a
   // paint left over from a stopped metronome would light a cell on a panel that
   // is no longer running.
@@ -109,333 +165,223 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
     beatPaintTimeoutsRef.current = []
   }
 
-  // Initialize audio context
+  const cancelScheduler = () => {
+    if (timerIDRef.current !== null) {
+      window.clearTimeout(timerIDRef.current)
+      timerIDRef.current = null
+    }
+  }
+
   useEffect(() => {
     return () => {
-      // Clean up timer on unmount
-      if (timerIDRef.current) {
-        window.clearTimeout(timerIDRef.current)
-      }
-
+      cancelScheduler()
       cancelPendingBeatPaints()
-
-      // Clean up oscillators
       cleanupOscillators()
+      if (isPlayingRef.current) setAudioSessionType("auto")
 
-      // Close audio context
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-      }
+      const context = audioContextRef.current
+      audioContextRef.current = null
+      // close() rejects asynchronously; an already-closed context is the
+      // expected case, anything else means the context is leaking.
+      context?.close().catch((err: unknown) => {
+        if (!isAlreadyInTargetState(err)) {
+          console.error("Failed to close the metronome AudioContext:", err)
+        }
+      })
     }
   }, [])
 
-  // Update BPM when initialBpm changes
+  // The tempo arrives as a prop, so the running scheduler picks it up through
+  // its ref on the next pass rather than from the render that started it.
   useEffect(() => {
-    if (initialBpm && initialBpm > 0) {
-      // Store the actual BPM for display and delay calculator
-      setDisplayBpm(initialBpm)
-      
-      // For the metronome functionality, limit to valid range
-      const metronomeValidBpm = Math.min(Math.max(40, initialBpm), 240)
-      setBpm(metronomeValidBpm)
-      bpmRef.current = metronomeValidBpm
-    }
-  }, [initialBpm])
-
-  // Handle time signature change
-  useEffect(() => {
-    // Parse the time signature to get beats per measure
-    const [numerator, denominator] = timeSignature.split("/").map(Number)
-    setBeatsPerMeasure(numerator)
-    beatsPerMeasureRef.current = numerator
-
-    // Detect compound meters (6/8, 9/8, 12/8, etc.)
-    const compound = (numerator === 6 || numerator === 9 || numerator === 12) && denominator === 8
-    setIsCompoundMeter(compound)
-    isCompoundMeterRef.current = compound
-
-    // Reset beat counter ONLY when time signature changes and metronome is playing
-    if (isPlaying) {
-      cancelPendingBeatPaints()
-      beatCountRef.current = 0;
-      setCurrentBeat(NO_BEAT);
-    }
-  }, [timeSignature, isPlaying])
-
-  // Update BPM ref when BPM changes
-  useEffect(() => {
-    // For metronome functionality, ensure we use a BPM within valid range (40-240)
-    bpmRef.current = Math.min(Math.max(40, bpm), 240)
+    bpmRef.current = bpm
   }, [bpm])
-
-  // Update isPlayingRef when isPlaying changes
-  useEffect(() => {
-    isPlayingRef.current = isPlaying
-  }, [isPlaying])
 
   // Notify parent component of state changes
   useEffect(() => {
     if (onStateChange) {
       // Only report a beat while running; a stopped metronome reports NO_BEAT
       // so parents do not hold a stale beat lit.
-      onStateChange(isPlaying, isPlaying ? currentBeat : NO_BEAT);
+      onStateChange(isPlaying, isPlaying ? currentBeat : NO_BEAT)
     }
-  }, [isPlaying, currentBeat, onStateChange]);
+  }, [isPlaying, currentBeat, onStateChange])
 
-  // Initialize audio context if needed
-  const ensureAudioContext = () => {
-    try {
-      // Check if we have an existing context that's suspended
-      if (audioContextRef.current && audioContextRef.current.state === "suspended") {
-        // Try to resume it
-        audioContextRef.current.resume();
-        return true;
-      }
+  const getOrCreateAudioContext = (): AudioContext | null => {
+    if (audioContextRef.current) return audioContextRef.current
 
-      // If we don't have a context or if there's an issue with the existing one, create a new one
-      if (!audioContextRef.current) {
-        // Use the modern standardized API with fallback for older browsers
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+    if (!AudioContextClass) return null
 
-        if (!AudioContextClass) {
-          console.error("AudioContext is not supported in this browser");
-          return false;
-        }
-        
-        // Create a fresh audio context
-        audioContextRef.current = new AudioContextClass({
-          // Request low latency mode if available
-          latencyHint: 'interactive'
-        });
-        
-        // Force resume the context if suspended (some browsers require user interaction)
-        if (audioContextRef.current.state === "suspended") {
-          audioContextRef.current.resume();
-        }
-      }
-      
-      return true;
-    } catch (e) {
-      console.error("Error initializing AudioContext:", e);
-      return false;
-    }
+    // Throws when the platform cannot open an output device; the caller
+    // reports that to the user.
+    audioContextRef.current = new AudioContextClass({ latencyHint: "interactive" })
+    return audioContextRef.current
   }
 
   // Play a metronome click with nicer waveforms
-  const playClick = (time: number) => {
-    const audioContext = audioContextRef.current;
-    if (!audioContext || !isPlayingRef.current) return;
-
-    // Ensure we have a valid time parameter
-    if (isNaN(time)) {
-      console.error("Invalid time parameter in playClick:", time);
-      return;
-    }
-
+  const playClick = (audioContext: AudioContext, time: number) => {
     // Get current beat count before incrementing
-    const currentBeatInMeasure = beatCountRef.current;
+    const currentBeatInMeasure = beatCountRef.current
 
     // One accent map, shared with the beat indicator, so what the panel shows
     // and what the speaker plays cannot disagree.
     const voice = clickVoiceForAccent(
       accentForBeat(currentBeatInMeasure, isCompoundMeterRef.current),
-    );
+    )
 
-    // Create oscillator directly
-    const osc = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
+    const osc = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
 
-    // Configure sound
-    osc.type = voice.type;
-    osc.frequency.value = voice.frequency;
+    osc.type = voice.type
+    osc.frequency.value = voice.frequency
 
     // Set envelope
-    gainNode.gain.value = 0;
-    gainNode.gain.setValueAtTime(0, time);
-    gainNode.gain.linearRampToValueAtTime(voice.gain, time + 0.005);
-    gainNode.gain.linearRampToValueAtTime(0.0001, time + 0.1);
+    gainNode.gain.value = 0
+    gainNode.gain.setValueAtTime(0, time)
+    gainNode.gain.linearRampToValueAtTime(voice.gain, time + 0.005)
+    gainNode.gain.linearRampToValueAtTime(0.0001, time + 0.1)
 
-    // Connect and play
-    osc.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    osc.connect(gainNode)
+    gainNode.connect(audioContext.destination)
 
-    // Start and schedule stop
-    osc.start(time);
-    osc.stop(time + 0.1);
+    osc.start(time)
+    osc.stop(time + 0.1)
 
-    // Track for cleanup
-    oscillatorsRef.current.push({ osc, gain: gainNode });
-
-    // Cleanup when done
-    setTimeout(() => {
-      // No try/catch: findIndex and splice on a plain array cannot throw, so
-      // one here could only have hidden a future unrelated failure.
-      const index = oscillatorsRef.current.findIndex(item => item.osc === osc);
-      if (index !== -1) {
-        oscillatorsRef.current.splice(index, 1);
-      }
-    }, Math.max(0, (time + 0.15 - audioContext.currentTime) * 1000));
+    // Tracked so a stop can silence clicks that are scheduled but not yet
+    // played; released once this one has finished.
+    const entry = { osc, gain: gainNode }
+    oscillatorsRef.current.push(entry)
+    osc.onended = () => {
+      oscillatorsRef.current = oscillatorsRef.current.filter((item) => item !== entry)
+      gainNode.disconnect()
+    }
 
     // Light the beat when it SOUNDS, not when it is scheduled. The scheduler
-    // runs 100ms ahead of the clock, so painting here would put the display
-    // ahead of the click by up to 40% of a beat at 240 BPM.
+    // runs ahead of the clock, so painting here would put the display ahead of
+    // the click by up to 40% of a beat at 240 BPM.
     const paintId = window.setTimeout(() => {
-      beatPaintTimeoutsRef.current = beatPaintTimeoutsRef.current.filter((id) => id !== paintId);
+      beatPaintTimeoutsRef.current = beatPaintTimeoutsRef.current.filter((id) => id !== paintId)
       if (isPlayingRef.current) {
-        setCurrentBeat(currentBeatInMeasure);
+        setCurrentBeat(currentBeatInMeasure)
       }
-    }, beatPaintDelayMs(time, audioContext.currentTime));
-    beatPaintTimeoutsRef.current.push(paintId);
+    }, beatPaintDelayMs(time, audioContext.currentTime))
+    beatPaintTimeoutsRef.current.push(paintId)
 
     // Update beat count AFTER scheduling the sound
-    beatCountRef.current = (currentBeatInMeasure + 1) % beatsPerMeasureRef.current;
-  };
+    beatCountRef.current = (currentBeatInMeasure + 1) % beatsPerMeasureRef.current
+  }
 
-  // Schedule upcoming metronome clicks with improved timing and cleanup
+  // Schedule every click that falls inside the lookahead window, then re-arm.
   const scheduler = () => {
-    if (!audioContextRef.current || !isPlayingRef.current) return
+    const audioContext = audioContextRef.current
+    if (!audioContext || !isPlayingRef.current) return
 
-    // Calculate time values
-    const currentTime = audioContextRef.current.currentTime
-
-    // Calculate seconds per beat based on current BPM
+    const scheduleAhead = document.hidden ? HIDDEN_SCHEDULE_AHEAD_S : SCHEDULE_AHEAD_S
+    const horizon = audioContext.currentTime + scheduleAhead
     const secondsPerBeat = 60.0 / bpmRef.current
 
-    // Schedule notes until the next 100ms
-    while (nextNoteTimeRef.current < currentTime + 0.1) {
-      // Schedule this beat
-      playClick(nextNoteTimeRef.current)
-
-      // Advance time for next beat
+    while (nextNoteTimeRef.current < horizon) {
+      playClick(audioContext, nextNoteTimeRef.current)
       nextNoteTimeRef.current += secondsPerBeat
     }
 
-    // Schedule the next scheduler call - use a shorter interval for better accuracy
-    timerIDRef.current = window.setTimeout(scheduler, 15)
+    timerIDRef.current = window.setTimeout(scheduler, SCHEDULER_INTERVAL_MS)
   }
 
-  // Create sound to use for click sounds
-  const createSoundSamples = useCallback(() => {
-    if (!audioContextRef.current) return;
-    
-    // Create test oscillators to ensure they're allowed
-    const testOsc = audioContextRef.current.createOscillator();
-    testOsc.type = "sine";
-    testOsc.frequency.value = 440;
-    
-    const testGain = audioContextRef.current.createGain();
-    testGain.gain.value = 0;
-    
-    testOsc.connect(testGain);
-    testGain.connect(audioContextRef.current.destination);
-    
-    // Start and immediately stop to "prime" the audio engine
-    testOsc.start(audioContextRef.current.currentTime);
-    testOsc.stop(audioContextRef.current.currentTime + 0.001);
-  }, []);
+  const stopMetronome = () => {
+    cancelScheduler()
+    cancelPendingBeatPaints()
+    cleanupOscillators()
 
-  // Toggle metronome on/off with improved state management and cleanup
-  const toggleMetronome = () => {
-    if (!ensureAudioContext()) return;
+    setIsPlaying(false)
+    isPlayingRef.current = false
+    beatCountRef.current = 0
+    setCurrentBeat(NO_BEAT)
+    setAudioSessionType("auto")
 
-    // Ensure audio context is running
-    if (audioContextRef.current && audioContextRef.current.state !== "running") {
-      audioContextRef.current.resume().catch(err => {
-        console.error("Failed to resume audio context:", err);
-      });
+    // A running context keeps the audio device open and rendering silence,
+    // which costs battery on a phone; park it until the next start.
+    audioContextRef.current?.suspend().catch((err: unknown) => {
+      if (!isAlreadyInTargetState(err)) {
+        console.error("Failed to suspend the metronome AudioContext:", err)
+      }
+    })
+  }
+
+  const startMetronome = () => {
+    let audioContext: AudioContext | null
+    try {
+      audioContext = getOrCreateAudioContext()
+    } catch (err) {
+      console.error("Failed to create the metronome AudioContext:", err)
+      setAudioError(AUDIO_UNAVAILABLE_MESSAGE)
+      return
+    }
+    if (!audioContext) {
+      setAudioError(AUDIO_UNAVAILABLE_MESSAGE)
+      return
+    }
+    setAudioError(null)
+
+    setAudioSessionType("playback")
+
+    // resume() has to be called synchronously inside the click: Safari only
+    // lets audio start from within a user gesture, and an await before this
+    // line would already be outside it.
+    if (audioContext.state !== "running") {
+      audioContext.resume().catch((err: unknown) => {
+        console.error("Failed to resume the metronome AudioContext:", err)
+        if (isPlayingRef.current) stopMetronome()
+        setAudioError(AUDIO_START_FAILED_MESSAGE)
+      })
     }
 
+    // NO_BEAT rather than 0: the first click is START_DELAY_S out and its own
+    // paint lights the downbeat when it sounds. A suspended context's clock
+    // is frozen until resume() lands, so the delay is measured from wherever
+    // the clock restarts.
+    beatCountRef.current = 0
+    setCurrentBeat(NO_BEAT)
+    nextNoteTimeRef.current = audioContext.currentTime + START_DELAY_S
+
+    setIsPlaying(true)
+    isPlayingRef.current = true
+
+    cancelScheduler()
+    scheduler()
+  }
+
+  const handleToggleMetronome = () => {
     if (isPlaying) {
-      // Stop metronome
-      if (timerIDRef.current) {
-        window.clearTimeout(timerIDRef.current);
-        timerIDRef.current = null;
-      }
-
-      cancelPendingBeatPaints();
-
-      // Clean up oscillators
-      cleanupOscillators();
-
-      // Reset state
-      setIsPlaying(false);
-      isPlayingRef.current = false;
-      beatCountRef.current = 0;
-      setCurrentBeat(NO_BEAT);
+      stopMetronome()
     } else {
-      // Create fresh audio context to avoid issues
-      try {
-        if (audioContextRef.current) {
-          try {
-            // close() rejects asynchronously as well as throwing synchronously.
-            // This context is discarded on the next line either way, so an
-            // unexpected close failure has nothing left to recover — but it
-            // still gets reported rather than dropped, because it means the old
-            // context is leaking rather than closing.
-            audioContextRef.current.close().catch((err: unknown) => {
-              if (!isAlreadyInTargetState(err)) {
-                console.error("Failed to close the previous AudioContext:", err);
-              }
-            });
-          } catch (err) {
-            // The enclosing catch logs and falls back to ensureAudioContext().
-            if (!isAlreadyInTargetState(err)) throw err;
-          }
-          audioContextRef.current = null;
-        }
-        
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        // The surrounding catch falls back to ensureAudioContext(); an explicit
-        // throw gets there with a diagnosable message instead of a TypeError
-        // from calling `new` on undefined.
-        if (!AudioContextClass) {
-          throw new Error("Web Audio API is not supported in this browser");
-        }
-        audioContextRef.current = new AudioContextClass({ latencyHint: 'interactive' });
-        
-        createSoundSamples();
-      } catch (e) {
-        console.error("Failed to create AudioContext:", e);
-        ensureAudioContext();
-      }
-      
-      // Initialize state for starting. NO_BEAT rather than 0: the first click
-      // is 100ms out and its own paint lights the downbeat when it sounds.
-      beatCountRef.current = 0;
-      setCurrentBeat(NO_BEAT);
-      nextNoteTimeRef.current = audioContextRef.current!.currentTime + 0.1;
-      
-      // Set playing states
-      setIsPlaying(true);
-      isPlayingRef.current = true;
-      
-      // Clean scheduler
-      if (timerIDRef.current) {
-        window.clearTimeout(timerIDRef.current);
-        timerIDRef.current = null;
-      }
-      
-      // Start scheduling
-      scheduler();
+      startMetronome()
     }
-  };
+  }
+
+  const handleTimeSignatureChange = (signature: string) => {
+    const next = parseTimeSignature(signature)
+    setTimeSignature(signature)
+    beatsPerMeasureRef.current = next.beatsPerMeasure
+    isCompoundMeterRef.current = next.isCompoundMeter
+
+    // A new meter starts on its downbeat. Clicks already committed to the
+    // audio clock still play out; only their paints are dropped, because the
+    // cell they would light belongs to the old measure.
+    if (isPlayingRef.current) {
+      cancelPendingBeatPaints()
+      beatCountRef.current = 0
+      setCurrentBeat(NO_BEAT)
+    }
+  }
 
   // Handle BPM change from slider
   const handleBpmChange = (value: number[]) => {
-    const newBpm = value[0]
-    setDisplayBpm(newBpm)
-    setBpm(newBpm)
-    bpmRef.current = newBpm
-    onBpmChange(newBpm)
+    onBpmChange(value[0])
   }
 
-  // Increment/decrement BPM
   const adjustBpm = (amount: number) => {
-    const newBpm = Math.min(Math.max(40, bpm + amount), 240)
-    setDisplayBpm(newBpm)
-    setBpm(newBpm)
-    bpmRef.current = newBpm
-    onBpmChange(newBpm)
+    onBpmChange(clampMetronomeBpm(bpm + amount))
   }
 
   const handleNotesToggle = () => {
@@ -445,7 +391,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
   // Calculate note durations based on current BPM
   const calculateNoteDurations = () => {
     // Base duration for a quarter note in milliseconds
-    // Use displayBpm which could be from tap tempo and might exceed 240
+    // Use displayBpm, the exact tap tempo, which can fall outside the playable range
     const quarterNote = Math.round(60000 / displayBpm)
 
     return [
@@ -476,7 +422,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
           {/* Top Row - Metronome On/Off Button and Time Signature */}
           <div className="flex items-center justify-between gap-3">
             <Button
-              onClick={toggleMetronome}
+              onClick={handleToggleMetronome}
               variant={isPlaying ? "default" : "outline"}
               aria-pressed={isPlaying}
               className="flex-1"
@@ -488,7 +434,7 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
               <span className="sr-only">{isPlaying ? "Turn off" : "Turn on"} metronome</span>
             </Button>
 
-            <Select value={timeSignature} onValueChange={setTimeSignature}>
+            <Select value={timeSignature} onValueChange={handleTimeSignatureChange}>
               <SelectTrigger className="w-24 shrink-0" aria-label="Time signature">
                 <SelectValue placeholder="4/4" />
               </SelectTrigger>
@@ -529,8 +475,8 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
             <div className="flex-1 flex items-center">
               <Slider
                 value={[bpm]}
-                min={40}
-                max={240}
+                min={MIN_METRONOME_BPM}
+                max={MAX_METRONOME_BPM}
                 step={1}
                 onValueChange={handleBpmChange}
                 aria-label="Tempo in beats per minute"
@@ -550,9 +496,9 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
 
           {/* The scale under the bargraph, in the micro face. */}
           <div className="flex justify-between font-micro text-micro tracking-micro text-ink-faint -mt-2">
-            <span>40</span>
+            <span>{MIN_METRONOME_BPM}</span>
             <span>{bpm} BPM</span>
-            <span>240</span>
+            <span>{MAX_METRONOME_BPM}</span>
           </div>
 
           {/* The measure, one cell per beat. Useful with the volume down and
@@ -563,6 +509,19 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
             isPlaying={isPlaying}
             isCompoundMeter={isCompoundMeter}
           />
+
+          {/* Law 1: a fault is inverse video plus blink, never a red box. */}
+          {audioError && (
+            <div
+              role="alert"
+              className="w-full bg-fill-bright text-on-fill px-3 py-1 text-sm uppercase tracking-body text-center"
+            >
+              <span className="blink" aria-hidden="true">
+                ✳✳{" "}
+              </span>
+              Fault: {audioError}
+            </div>
+          )}
         </div>
       </div>
 
@@ -615,7 +574,8 @@ export function Metronome({ initialBpm, onBpmChange, onStateChange }: MetronomeP
             <p className="mt-4 text-sm uppercase tracking-body text-ink-dim">
               Delay and reverb times are calculated from the current tempo ({displayBpm} BPM). A quarter note at this tempo
               equals {Math.round(60000 / displayBpm)} milliseconds.
-              {displayBpm > 240 && " Metronome playback is limited to 240 BPM, but delay calculations remain accurate at any tempo."}
+              {(displayBpm > MAX_METRONOME_BPM || displayBpm < MIN_METRONOME_BPM) &&
+                ` Metronome playback is limited to ${MIN_METRONOME_BPM}–${MAX_METRONOME_BPM} BPM, but delay calculations remain accurate at any tempo.`}
             </p>
           </div>
         </div>
