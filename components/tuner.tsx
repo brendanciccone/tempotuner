@@ -7,9 +7,9 @@ import { NoteDisplay } from "@/components/tuner/note-display"
 import { TuningIndicator } from "@/components/tuner/tuning-indicator"
 import { TunerSettings } from "@/components/tuner/tuner-settings"
 
-// Parent components (ClientWrapper, ClientApp) already gate rendering until
-// client-side mount, so this component never runs during SSR and needs no
-// additional hydration guard.
+// Prerendered into the static HTML like the rest of the page. That is safe
+// because useTuner touches the microphone and Web Audio only from effects,
+// which never run during prerendering.
 export default function Tuner() {
   const [state, actions] = useTuner()
 
