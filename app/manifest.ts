@@ -6,7 +6,7 @@ export const dynamic = "force-static"
 // panel colour. The 192/512 icons already shipped in public/ but nothing
 // referenced them in a manifest, which is the only place those browsers read
 // them from.
-export default function manifest(): MetadataRoute.Manifest {
+const manifest = (): MetadataRoute.Manifest => {
   return {
     name: "TempoTuner",
     short_name: "TempoTuner",
@@ -21,3 +21,5 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
   }
 }
+
+export default manifest

@@ -135,6 +135,10 @@ export class AudioAnalyzer {
       return "error"
     }
 
+    // The context this attempt runs against. cleanup() replaces it with null,
+    // which is how every await below tells that the attempt was abandoned.
+    let context: AudioContext | null = null
+
     try {
       // 3. Create AudioContext with vendor-prefix fallback
       if (!this.audioContext) {
@@ -145,7 +149,7 @@ export class AudioAnalyzer {
         }
         this.audioContext = created
       }
-      const context = this.audioContext
+      context = this.audioContext
 
       // 4. Try to resume — handles "suspended" (initial) and "interrupted" (tab switch / lock screen)
       await this.tryResume()
@@ -203,6 +207,10 @@ export class AudioAnalyzer {
 
       return "success"
     } catch (err) {
+      // A refusal (or any failure) that lands after cleanup() belongs to an
+      // attempt nobody is waiting on; reporting it would put a stale error on
+      // whatever mounted next.
+      if (context !== null && this.audioContext !== context) return "cancelled"
       this.fail(this.classifyError(err), err)
       return "error"
     }

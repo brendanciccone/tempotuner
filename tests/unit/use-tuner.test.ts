@@ -306,6 +306,29 @@ describe("AudioAnalyzer", () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  it("reports a microphone refusal that arrives after cleanup() as 'cancelled', not an error", async () => {
+    // The prompt can be answered after the tuner is gone — or, under React
+    // StrictMode's remount, after a second analyzer has already started. A
+    // stale refusal reported through onError would land on that new mount.
+    let refuse: (err: DOMException) => void = () => {
+      throw new Error("getUserMedia was not called")
+    }
+    mockGetUserMedia.mockImplementation(
+      () => new Promise<typeof mockStream>((_, reject) => (refuse = reject)),
+    )
+
+    const onError = vi.fn()
+    const analyzer = new AudioAnalyzer(onError)
+    const pending = analyzer.initialize()
+    await vi.waitFor(() => expect(mockGetUserMedia).toHaveBeenCalled())
+
+    await analyzer.cleanup()
+    refuse(new DOMException("Permission denied", "NotAllowedError"))
+
+    expect(await pending).toBe("cancelled")
+    expect(onError).not.toHaveBeenCalled()
+  })
+
   it("does not request the microphone when cleanup() runs during the initial resume", async () => {
     let finishResume: () => void = () => {
       throw new Error("resume was not called")
