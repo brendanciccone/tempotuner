@@ -112,6 +112,11 @@ describe("browserslist query cache (GHSA / Dependabot #79)", () => {
 // next/og ImageResponse RCE (not imported anywhere here, but the floor holds
 // regardless), and undici and brace-expansion are overrides on dev-only
 // transitives — undici via jsdom, brace-expansion via eslint's minimatch.
+// A second October batch raises sharp to 0.35.5 for a librsvg defect
+// (GHSA-wq5f-xc86-pv6w, reached via wrangler → miniflare) and floors
+// source-map-js at 1.2.2 for an event-loop DoS in indexed source-map section
+// offsets (GHSA-68fv-2mgg-jv7q, reached via @tailwindcss/postcss). Both are
+// build- or dev-only, and both are overrides.
 // ----------------------------------------------------------------
 
 // Resolved from the cwd rather than from `import.meta.url`: the jsdom
@@ -157,6 +162,8 @@ describe("patched-release comparison", () => {
     expect(isAtLeast("7.29.0", "7.29.1")).toBe(false)
     expect(isAtLeast("1.1.20", "1.1.21")).toBe(false)
     expect(isAtLeast("5.0.11", "5.0.12")).toBe(false)
+    expect(isAtLeast("0.35.4", "0.35.5")).toBe(false)
+    expect(isAtLeast("1.2.1", "1.2.2")).toBe(false)
   })
 })
 
@@ -168,8 +175,11 @@ describe.each([
     floor: "16.3.6",
     advisories: "GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4, GHSA-vcvr-r3jv-pc5j",
   },
-  { name: "sharp", floor: "0.35.4", advisories: "GHSA-rgj7-g3m4-5g8c" },
+  // 0.35.4 closed GHSA-rgj7-g3m4-5g8c (libheif); 0.35.5 raised the floor for
+  // GHSA-wq5f-xc86-pv6w (librsvg).
+  { name: "sharp", floor: "0.35.5", advisories: "GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w" },
   { name: "js-yaml", floor: "4.3.2", advisories: "GHSA-2883-xcg3-v3hh" },
+  { name: "source-map-js", floor: "1.2.2", advisories: "GHSA-68fv-2mgg-jv7q" },
   {
     name: "undici",
     floor: "7.29.1",
