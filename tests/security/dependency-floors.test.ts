@@ -117,10 +117,13 @@ describe("browserslist query cache (GHSA / Dependabot #79)", () => {
 // source-map-js at 1.2.2 for an event-loop DoS in indexed source-map section
 // offsets (GHSA-68fv-2mgg-jv7q, reached via @tailwindcss/postcss). Both are
 // build- or dev-only, and both are overrides.
-// A third October batch floors vite at 8.1.6 through the existing override:
+// A third October batch floors vite at 8.3.3 through the existing override:
 // vite bundles launch-editor into its own dist rather than depending on it, so
 // the three launch-editor advisories are filed against vite and there is no
-// launch-editor entry in the lockfile to override. @vitest/mocker is floored at
+// launch-editor entry in the lockfile to override. Each of the five vite
+// advisories was backported per minor (8.1.6, 8.2.4, 8.3.3), so a floor at the
+// lowest backport would accept the unpatched 8.2.3 and 8.3.2; the floor is the
+// patch on the minor the override pins instead. @vitest/mocker is floored at
 // 5.0.3 by raising vitest itself, since vitest pins its mocker exactly. Both
 // are test-runner only and never reach the static export.
 // ----------------------------------------------------------------
@@ -172,7 +175,8 @@ describe("patched-release comparison", () => {
     expect(isAtLeast("5.0.11", "5.0.12")).toBe(false)
     expect(isAtLeast("0.35.4", "0.35.5")).toBe(false)
     expect(isAtLeast("1.2.1", "1.2.2")).toBe(false)
-    expect(isAtLeast("8.1.5", "8.1.6")).toBe(false)
+    expect(isAtLeast("8.3.2", "8.3.3")).toBe(false)
+    expect(isAtLeast("8.2.3", "8.3.3")).toBe(false)
     expect(isAtLeast("5.0.2", "5.0.3")).toBe(false)
   })
 })
@@ -194,7 +198,7 @@ describe.each([
   // bundled launch-editor defects; the other two are vite's own dev server.
   {
     name: "vite",
-    floor: "8.1.6",
+    floor: "8.3.3",
     advisories:
       "GHSA-587h-7wmj-h5pm, GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-rq7h-c2jc-7f22, GHSA-9jrq-w75r-8gcw",
   },
