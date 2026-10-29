@@ -300,6 +300,40 @@ describe("useTuner", () => {
     expect(mockSourceConnect).not.toHaveBeenCalled()
   })
 
+  it("clears the error as soon as Try again is clicked", async () => {
+    // Regression: the fault and its button stayed up until the old
+    // AudioContext's close() resolved, so the click looked ignored and invited
+    // a second one.
+    mockGetUserMedia.mockRejectedValueOnce(new DOMException("Denied", "NotAllowedError"))
+
+    const { result, unmount } = renderHook(() => useTuner())
+    await waitFor(() => {
+      expect(result.current[0].error).toMatch(/access denied/i)
+    })
+
+    let finishClose: () => void = () => {
+      throw new Error("close() was not called")
+    }
+    mockAudioContextClose.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishClose = resolve)),
+    )
+
+    let retryDone: Promise<void> = Promise.resolve()
+    act(() => {
+      retryDone = result.current[1].retry()
+    })
+    expect(result.current[0].error).toBeNull()
+    expect(result.current[0].isInitializing).toBe(true)
+
+    await act(async () => {
+      finishClose()
+      await retryDone
+    })
+    expect(result.current[0].isInitializing).toBe(false)
+
+    unmount()
+  })
+
   it("does not reopen the microphone when the tuner unmounts during a retry", async () => {
     // Regression: retry() awaits the old AudioContext's close() before
     // initialising again. Switching to the Tempo tab inside that window
@@ -319,7 +353,10 @@ describe("useTuner", () => {
       () => new Promise<void>((resolve) => (finishClose = resolve)),
     )
 
-    const retryDone = result.current[1].retry()
+    let retryDone: Promise<void> = Promise.resolve()
+    act(() => {
+      retryDone = result.current[1].retry()
+    })
     unmount()
     finishClose()
     await retryDone
@@ -328,11 +365,23 @@ describe("useTuner", () => {
     expect(mockSourceConnect).not.toHaveBeenCalled()
   })
 
-  it("lets only the newest retry initialise when Try again is clicked twice", async () => {
-    // Regression: the error (and its Try again button) stays up while the first
-    // retry waits on close(), so a second click started a second retry. Both
-    // then initialised the same analyzer, each requesting its own stream, and
-    // the later grant overwrote the earlier one with nothing left to stop it.
+  it("lets only the newest retry initialise when retry() is called twice", async () => {
+    // Regression: a second retry started while the first was waiting on
+    // close() found nothing left to close, so it created a new AudioContext
+    // before the old one had closed. Both retries then initialised the same
+    // analyzer, each requesting its own stream, and the later grant
+    // overwrote the earlier one with nothing left to stop it.
+    let contextsCreated = 0
+    const BaseContext = createMockAudioContext()
+    vi.stubGlobal(
+      "AudioContext",
+      class extends BaseContext {
+        constructor() {
+          super()
+          contextsCreated++
+        }
+      },
+    )
     mockGetUserMedia.mockRejectedValueOnce(new DOMException("Denied", "NotAllowedError"))
 
     const { result, unmount } = renderHook(() => useTuner())
@@ -354,18 +403,24 @@ describe("useTuner", () => {
       return new Promise((resolve) => grants.push(() => resolve({ getTracks: () => [{ stop }] })))
     })
 
-    // First click: parked on the old context's close().
-    const firstRetry = result.current[1].retry()
-    // Second click: nothing left to close, so it goes straight to the prompt.
+    // Both calls land while the old context's close() is still pending.
+    let firstRetry: Promise<void> = Promise.resolve()
     let secondRetry: Promise<void> = Promise.resolve()
+    act(() => {
+      firstRetry = result.current[1].retry()
+    })
     act(() => {
       secondRetry = result.current[1].retry()
     })
-    await waitFor(() => expect(grants).toHaveLength(1))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(contextsCreated).toBe(1)
+    expect(grants).toHaveLength(0)
 
-    // The first retry resumes while the second is still on the permission
-    // prompt; let it run as far as it will before any grant arrives.
     finishClose()
+    await waitFor(() => expect(grants).toHaveLength(1))
+    // Let a stale retry run as far as it will before any grant arrives.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -376,6 +431,7 @@ describe("useTuner", () => {
 
     expect(result.current[0].error).toBeNull()
     expect(result.current[0].isInitializing).toBe(false)
+    expect(contextsCreated).toBe(2)
     // The mount's denied request plus the second retry's — nothing from the first.
     expect(mockGetUserMedia).toHaveBeenCalledTimes(2)
     expect(mockSourceConnect).toHaveBeenCalledTimes(1)

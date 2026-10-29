@@ -80,6 +80,10 @@ export function useTuner(): [TunerState, TunerActions] {
   // Bumped by every retry so an earlier one still waiting on close() can tell
   // that a newer click has taken over.
   const retryAttemptRef = useRef(0)
+  // The analyzer cleanup still in flight. A retry that finds the analyzer ref
+  // already empty waits on this instead, so it never creates a new
+  // AudioContext before the old one has closed.
+  const pendingCleanupRef = useRef<Promise<void> | null>(null)
 
   // Keep refs to current settings for use in analysis loop
   const useFlatsRef = useRef(useFlats)
@@ -211,8 +215,9 @@ export function useTuner(): [TunerState, TunerActions] {
     const analyzer = audioAnalyzerRef.current
     audioAnalyzerRef.current = null
     if (analyzer) {
-      await analyzer.cleanup()
+      pendingCleanupRef.current = analyzer.cleanup()
     }
+    await pendingCleanupRef.current
   }, [stopAnalysisLoop])
 
   /**
@@ -272,22 +277,24 @@ export function useTuner(): [TunerState, TunerActions] {
    */
   const retry = useCallback(async () => {
     const attempt = ++retryAttemptRef.current
+    // Reset here rather than inside initialise(): on mount these already hold
+    // their initial values, and setting them again from the mount effect is a
+    // synchronous setState-in-effect for nothing. Set before the close() wait
+    // below so the click shows progress (and the Try again button goes away)
+    // at once.
+    setError(null)
+    setNeedsUserGesture(false)
+    setIsInitializing(true)
     // Must await cleanupResources so the previous AudioContext fully closes
     // before we create a new one (Web Audio spec: creation-blocking resources
     // are only released after close() resolves).
     await cleanupResources()
     // The analyzer ref is already empty during that wait, so an unmount (the
     // user switching to the Tempo tab) has nothing to release, and a second
-    // click on Try again goes straight to initialising. Carrying on in either
-    // case would open a microphone stream nothing ever stops.
+    // retry() would wait on the same close() and initialise too. Carrying on
+    // in either case would open a microphone stream nothing ever stops.
     if (isUnmountedRef.current || attempt !== retryAttemptRef.current) return
     resetDisplay()
-    // Reset here rather than inside initialise(): on mount these already hold
-    // their initial values, and setting them again from the mount effect is a
-    // synchronous setState-in-effect for nothing.
-    setError(null)
-    setNeedsUserGesture(false)
-    setIsInitializing(true)
     await initialise()
   }, [initialise, cleanupResources, resetDisplay])
 
