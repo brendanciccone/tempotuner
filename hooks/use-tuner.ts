@@ -77,6 +77,9 @@ export function useTuner(): [TunerState, TunerActions] {
   const lastSignalTimeRef = useRef<number>(0)
   const signalDetectedRef = useRef(false)
   const isUnmountedRef = useRef(false)
+  // Bumped by every retry so an earlier one still waiting on close() can tell
+  // that a newer click has taken over.
+  const retryAttemptRef = useRef(0)
 
   // Keep refs to current settings for use in analysis loop
   const useFlatsRef = useRef(useFlats)
@@ -213,16 +216,6 @@ export function useTuner(): [TunerState, TunerActions] {
   }, [stopAnalysisLoop])
 
   /**
-   * Stop the tuner: release resources AND reset the visible UI. Use this for
-   * user-initiated stops (e.g. retry). On unmount call cleanupResources()
-   * directly so we don't schedule setState on an unmounted component.
-   */
-  const stopTuner = useCallback(async (): Promise<void> => {
-    await cleanupResources()
-    resetDisplay()
-  }, [cleanupResources, resetDisplay])
-
-  /**
    * Initialise the analyzer + detector and start the analysis loop based on the result.
    * Used by the mount effect and the retry action.
    */
@@ -278,10 +271,17 @@ export function useTuner(): [TunerState, TunerActions] {
    * the user may have changed their browser setting.
    */
   const retry = useCallback(async () => {
-    // Must await stopTuner so the previous AudioContext fully closes before we
-    // create a new one (Web Audio spec: creation-blocking resources are only
-    // released after close() resolves).
-    await stopTuner()
+    const attempt = ++retryAttemptRef.current
+    // Must await cleanupResources so the previous AudioContext fully closes
+    // before we create a new one (Web Audio spec: creation-blocking resources
+    // are only released after close() resolves).
+    await cleanupResources()
+    // The analyzer ref is already empty during that wait, so an unmount (the
+    // user switching to the Tempo tab) has nothing to release, and a second
+    // click on Try again goes straight to initialising. Carrying on in either
+    // case would open a microphone stream nothing ever stops.
+    if (isUnmountedRef.current || attempt !== retryAttemptRef.current) return
+    resetDisplay()
     // Reset here rather than inside initialise(): on mount these already hold
     // their initial values, and setting them again from the mount effect is a
     // synchronous setState-in-effect for nothing.
@@ -289,7 +289,7 @@ export function useTuner(): [TunerState, TunerActions] {
     setNeedsUserGesture(false)
     setIsInitializing(true)
     await initialise()
-  }, [initialise, stopTuner])
+  }, [initialise, cleanupResources, resetDisplay])
 
   // Resume AudioContext when user returns to the tab (handles iOS Safari "interrupted" state)
   useEffect(() => {
