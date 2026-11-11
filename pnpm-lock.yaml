@@ -8,7 +8,7 @@ overrides:
   vite@^8.0.0: 8.3.5
   postcss: ^8.5.24
   sharp: ^0.35.5
-  undici: ^7.29.1
+  undici: ^7.30.1
   nanoid@^3.0.0: ^3.3.17
   js-yaml@^4.0.0: ^4.3.2
   source-map-js@^1.0.0: ^1.2.2
@@ -3104,8 +3104,8 @@ packages:
   undici-types@6.20.0:
     resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
 
-  undici@7.30.0:
-    resolution: {integrity: sha512-dkrQXeHSaoamnItlYbmzG0wFYrM0ZwDxCIg0A7aKjTyyhh9svRzCNFEzV+Vm05/yehjCzjDZ31KXfGEjYSztDQ==}
+  undici@7.30.2:
+    resolution: {integrity: sha512-mLyPQnHwUxaM/rideoK/+KL8DaAJLRl4aBCfmX444aCSLnIaomqPLtNRe2jdCYcsk5wZzXrDIQC8ZeYNRAYyIA==}
     engines: {node: '>=20.18.1'}
 
   unenv@2.0.0-rc.24:
@@ -5508,7 +5508,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.1
-      undici: 7.30.0
+      undici: 7.30.2
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -5696,7 +5696,7 @@ snapshots:
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.35.5(@types/node@22.13.10)
-      undici: 7.30.0
+      undici: 7.30.2
       workerd: 1.20260623.1
       ws: 8.21.0
       youch: 4.1.0-beta.10
@@ -6302,7 +6302,7 @@ snapshots:
 
   undici-types@6.20.0: {}
 
-  undici@7.30.0: {}
+  undici@7.30.2: {}
 
   unenv@2.0.0-rc.24:
     dependencies:
