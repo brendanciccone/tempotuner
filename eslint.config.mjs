@@ -9,7 +9,8 @@ import tseslint from "typescript-eslint"
 //
 // .astro files are not linted: eslint-plugin-astro's releases that understand
 // Astro 7 need ESLint 10. They hold only markup and imports; all logic lives
-// in the .ts/.tsx files below, and `pnpm build` type-checks everything.
+// in the .ts/.tsx files below. `pnpm build` runs `astro check`, which
+// type-checks the .astro files as well as the TypeScript ones.
 const config = [
   {
     ignores: ["dist/**", ".astro/**", "node_modules/**"],
