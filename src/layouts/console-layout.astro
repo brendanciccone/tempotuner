@@ -3,12 +3,16 @@ import { Font } from "astro:assets"
 import "../styles/globals.css"
 
 interface Props {
-  title: string
+  /** The document <title>. Defaults to the site title; pages override it. */
+  title?: string
 }
 
-const { title } = Astro.props
-
 const SITE_TITLE = "Tuner, Metronome, and Tap Tempo | TempoTuner"
+
+// Only the document <title> follows the page. The OpenGraph/Twitter titles stay
+// on the site title everywhere: a shared link should name the app, and the one
+// page with its own title (404) is noindex and never meant to be shared.
+const { title = SITE_TITLE } = Astro.props
 const DESCRIPTION =
   "Chromatic tuner for any instrument, metronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times."
 

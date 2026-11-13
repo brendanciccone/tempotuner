@@ -95,7 +95,8 @@ describe("browserslist query cache (GHSA / Dependabot #79)", () => {
 })
 
 // ----------------------------------------------------------------
-// The September 2026 floors — Next.js 16.3.3+, sharp 0.35.4+, js-yaml 4.3.2+ —
+// The September 2026 floors — Next.js 16.3.3+ (retired with the dependency;
+// see the end of this block), sharp 0.35.4+, js-yaml 4.3.2+ —
 // have the same shape as the browserslist one above: two of them live in
 // `pnpm.overrides` and the third is a pinned version, so nothing this repo owns
 // changes and no other test here would notice a regression.

@@ -46,7 +46,7 @@ pnpm dev
 | `pnpm build` | Type-check, then build the static site to `dist/` |
 | `pnpm preview` | Serve the built `dist/` locally |
 | `pnpm lint` | ESLint |
-| `pnpm test` | All tests (`test:unit`, `test:security` for one suite) |
+| `pnpm test` | All tests (`test:unit`, `test:integration`, `test:security` for one suite) |
 | `pnpm run deploy` | Build and deploy to Cloudflare Workers — see [DEPLOY.md](DEPLOY.md) |
 
 ```
@@ -54,7 +54,7 @@ src/          Astro pages, layout, global styles and sitemap endpoint
 components/   Tuner, tap tempo, metronome and UI primitives
 hooks/        useTuner
 utils/        Pitch detection, FFT, note math, metronome timing
-tests/        Unit (177) and security (21) tests
+tests/        Unit (177), integration (3) and security (21) tests
 ```
 
 ## License
