@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect, useRef, useCallback } from "react"
 import { AudioAnalyzer } from "@/utils/audio-analyzer"
 import { NoteDetector } from "@/utils/note-detector"

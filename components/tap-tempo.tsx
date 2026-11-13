@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect, useCallback, type MouseEvent, type PointerEvent } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Metronome } from "@/components/metronome"

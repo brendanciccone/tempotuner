@@ -1,0 +1,20 @@
+---
+import ConsoleLayout from "../layouts/console-layout.astro"
+
+// Cloudflare serves this for any unknown path (not_found_handling: "404-page"
+// in wrangler.jsonc). Plain markup, no island: there is nothing to hydrate.
+---
+
+<ConsoleLayout title="404: This page could not be found.">
+  <meta slot="head" name="robots" content="noindex" />
+  <main class="flex flex-1 flex-col items-center justify-center gap-4 p-5 sm:p-6 text-center">
+    <h1 class="text-4xl tracking-display text-ink-bright text-glow">404</h1>
+    <p class="text-ink">This page could not be found.</p>
+    <a
+      href="/"
+      class="border-2 border-ink rounded-lg px-6 py-2 text-xl text-ink text-glow hover:text-ink-bright hover:border-ink-bright focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]"
+    >
+      Back to TempoTuner
+    </a>
+  </main>
+</ConsoleLayout>

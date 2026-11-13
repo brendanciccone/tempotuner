@@ -1,5 +1,3 @@
-"use client"
-
 import { useRef, useState, type KeyboardEvent } from "react"
 import TapTempo from "@/components/tap-tempo"
 import Tuner from "@/components/tuner"
@@ -8,7 +6,7 @@ import { cn } from "@/lib/utils"
 type TabId = "tuner" | "tempo"
 const TAB_ORDER: readonly TabId[] = ["tuner", "tempo"] as const
 
-export default function ClientApp() {
+export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>("tuner")
   const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
     tuner: null,

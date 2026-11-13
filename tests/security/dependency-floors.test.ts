@@ -115,7 +115,7 @@ describe("browserslist query cache (GHSA / Dependabot #79)", () => {
 // A second October batch raises sharp to 0.35.5 for a librsvg defect
 // (GHSA-wq5f-xc86-pv6w, reached via wrangler → miniflare) and floors
 // source-map-js at 1.2.2 for an event-loop DoS in indexed source-map section
-// offsets (GHSA-68fv-2mgg-jv7q, reached via @tailwindcss/postcss). Both are
+// offsets (GHSA-68fv-2mgg-jv7q, reached via @tailwindcss/vite). Both are
 // build- or dev-only, and both are overrides.
 // A third October batch floors vite at 8.3.3 through the existing override:
 // vite bundles launch-editor into its own dist rather than depending on it, so
@@ -126,6 +126,12 @@ describe("browserslist query cache (GHSA / Dependabot #79)", () => {
 // patch on the minor the override pins instead. @vitest/mocker is floored at
 // 5.0.3 by raising vitest itself, since vitest pins its mocker exactly. Both
 // are test-runner only and never reach the static export.
+//
+// Next.js is no longer a dependency — the site moved to Astro — so its floor
+// went with it. The 16.x pairs in the comparison tests below stay: they are
+// still the clearest case of a higher patch sitting on an unpatched minor. vite
+// is now Astro's build tool as well as vitest's, which raises the stakes on
+// that floor but does not change it.
 // ----------------------------------------------------------------
 
 // Resolved from the cwd rather than from `import.meta.url`: the jsdom
@@ -182,13 +188,6 @@ describe("patched-release comparison", () => {
 })
 
 describe.each([
-  // 16.3.3 closed GHSA-p293-qw3h-jr36 and GHSA-2xp9-vwfh-vxw4; 16.3.6 raised the
-  // floor for GHSA-vcvr-r3jv-pc5j, which spans >=16.2.0 <16.3.6.
-  {
-    name: "next",
-    floor: "16.3.6",
-    advisories: "GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4, GHSA-vcvr-r3jv-pc5j",
-  },
   // 0.35.4 closed GHSA-rgj7-g3m4-5g8c (libheif); 0.35.5 raised the floor for
   // GHSA-wq5f-xc86-pv6w (librsvg).
   { name: "sharp", floor: "0.35.5", advisories: "GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w" },
