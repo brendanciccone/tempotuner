@@ -87,7 +87,7 @@ const setAudioSessionType = (type: AudioSessionType): void => {
 
 // Custom SelectItem with the selection marker on the right
 const CustomSelectItem = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.Item>,
+  React.ComponentRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Item
