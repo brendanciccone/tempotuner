@@ -1,0 +1,84 @@
+---
+import { Font } from "astro:assets"
+import "../styles/globals.css"
+
+interface Props {
+  /** The document <title>. Defaults to the site title; pages override it. */
+  title?: string
+}
+
+const SITE_TITLE = "Tuner, Metronome, and Tap Tempo | TempoTuner"
+
+// Only the document <title> follows the page. The OpenGraph/Twitter titles stay
+// on the site title everywhere: a shared link should name the app, and the one
+// page with its own title (404) is noindex and never meant to be shared.
+const { title = SITE_TITLE } = Astro.props
+const DESCRIPTION =
+  "Chromatic tuner for any instrument, metronome to practice, and a tap tempo to help you find the BPM of any song and calculate delay and reverb times."
+
+// `site` is set in astro.config.mjs, so it is always defined at build time.
+const siteUrl = new URL("/", Astro.site)
+const ogImageUrl = new URL("/og-image.png", Astro.site)
+
+// touch-manipulation on <html> turns off double-tap-to-zoom (pinch zoom still
+// works): tapping a tempo or rapidly pressing +/− is exactly a double tap, and
+// iOS Safari zoomed the page instead of registering the second press.
+---
+
+<!doctype html>
+<html lang="en" class="touch-manipulation">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000b04" />
+    {/* The panel is dark and has no light variant, so the browser's own chrome —
+        scrollbars, overscroll, the canvas before CSS loads — should be dark too
+        rather than flashing white. */}
+    <meta name="color-scheme" content="dark" />
+    <title>{title}</title>
+    <meta name="description" content={DESCRIPTION} />
+    <slot name="head" />
+
+    <Font cssVariable="--font-vt323" preload />
+    <Font cssVariable="--font-silkscreen" preload />
+
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" href="/favicon-16x16.png" sizes="16x16" type="image/png" />
+    <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" type="image/png" />
+    <link rel="icon" href="/android-chrome-192x192.png" sizes="192x192" type="image/png" />
+    <link rel="icon" href="/android-chrome-512x512.png" sizes="512x512" type="image/png" />
+    {/* Lets Android and desktop Chrome install the app with its own name, icon
+        and panel colour. The 192/512 icons are only read from the manifest. */}
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <meta property="og:title" content={SITE_TITLE} />
+    <meta property="og:description" content={DESCRIPTION} />
+    <meta property="og:url" content={siteUrl.href} />
+    <meta property="og:site_name" content="TempoTuner" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content={ogImageUrl.href} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="TempoTuner - Tuner, Metronome, and Tap Tempo" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:creator" content="@tempotuner" />
+    <meta name="twitter:title" content={SITE_TITLE} />
+    <meta name="twitter:description" content={DESCRIPTION} />
+    <meta name="twitter:image" content={ogImageUrl.href} />
+  </head>
+  <body>
+    <div class="ac-screen"><slot /></div>
+    {/* The glass, a sibling of the frame rather than a child of it: Radix
+        portals mount to <body>, so an overlay nested inside the frame would
+        stop at the edge of every dropdown and dialog. Each layer needs its
+        own node because one element has only a single ::after. */}
+    <div class="ac-glass" aria-hidden="true">
+      <span class="ac-bloom"></span>
+      <span class="ac-retrace"></span>
+      <span class="ac-mesh"></span>
+      <span class="ac-scanlines"></span>
+    </div>
+  </body>
+</html>

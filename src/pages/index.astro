@@ -1,0 +1,14 @@
+---
+import App from "@/components/app"
+import ConsoleLayout from "../layouts/console-layout.astro"
+
+// client:load server-renders the island into the HTML and hydrates it straight
+// away. Nothing in the tree reads browser APIs during render (audio and the mic
+// start in effects), so the full panel ships in the HTML and paints before any
+// JavaScript has loaded. Don't switch to client:only, which would ship an empty
+// slot until the bundle runs.
+---
+
+<ConsoleLayout>
+  <App client:load />
+</ConsoleLayout>

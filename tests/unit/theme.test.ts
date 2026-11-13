@@ -10,13 +10,13 @@ import { describe, expect, it } from "vitest"
 // ----------------------------------------------------------------
 
 const repoRoot = path.resolve(__dirname, "../..")
-const globalsCss = readFileSync(path.join(repoRoot, "app/globals.css"), "utf8")
+const globalsCss = readFileSync(path.join(repoRoot, "src/styles/globals.css"), "utf8")
 const packageJson: unknown = JSON.parse(
   readFileSync(path.join(repoRoot, "package.json"), "utf8"),
 )
 
-const SOURCE_DIRS = ["app", "components", "hooks", "lib", "utils"] as const
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".css"]
+const SOURCE_DIRS = ["src", "components", "hooks", "lib", "utils"] as const
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".astro", ".css"]
 
 const collectSourceFiles = (dir: string): string[] => {
   const entries = readdirSync(dir)
@@ -163,7 +163,7 @@ const contrastRatio = (a: string, b: string): number => {
 /** Pull a `--token: #rrggbb;` declaration out of globals.css. */
 const readToken = (token: string): string => {
   const match = globalsCss.match(new RegExp(`${token}:\\s*(#[0-9a-f]{6});`))
-  if (!match) throw new Error(`${token} is not defined in app/globals.css`)
+  if (!match) throw new Error(`${token} is not defined in src/styles/globals.css`)
   return match[1]
 }
 
@@ -275,7 +275,7 @@ describe("terminal type scale", () => {
 /** Pull a `--token: <duration>ms;` declaration out of globals.css. */
 const readDurationMs = (token: string): number => {
   const match = globalsCss.match(new RegExp(`${token}:\\s*(\\d+)ms;`))
-  if (!match) throw new Error(`${token} is not defined in ms in app/globals.css`)
+  if (!match) throw new Error(`${token} is not defined in ms in src/styles/globals.css`)
   return Number.parseInt(match[1], 10)
 }
 

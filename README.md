@@ -27,13 +27,13 @@ The microphone needs a secure context (HTTPS or `localhost`). On iPhone the metr
 
 ## Tech
 
-Next.js 16 (static export), React 19, TypeScript, Tailwind CSS v4 and Radix UI primitives. Audio is plain Web Audio: an `AnalyserNode` feeding an FFT-based YIN pitch detector, and a look-ahead scheduler for the metronome clicks.
+Astro 7 (static output) with the app as a single React 19 island, TypeScript, Tailwind CSS v4 and Radix UI primitives. Audio is plain Web Audio: an `AnalyserNode` feeding an FFT-based YIN pitch detector, and a look-ahead scheduler for the metronome clicks.
 
-The visual design adapts [Amber Console](https://github.com/DutchDiederik/AmberConsole) by Diederik (BSD-3-Clause), with the amber swapped for a single green phosphor ramp. Design tokens live in `app/globals.css`.
+The visual design adapts [Amber Console](https://github.com/DutchDiederik/AmberConsole) by Diederik (BSD-3-Clause), with the amber swapped for a single green phosphor ramp. Design tokens live in `src/styles/globals.css`.
 
 ## Getting started
 
-Requires Node.js 22+ and pnpm.
+Requires Node.js 22.23.4+ (pinned in `.node-version`) and pnpm.
 
 ```bash
 pnpm install
@@ -43,17 +43,18 @@ pnpm dev
 | Script | |
 |---|---|
 | `pnpm dev` | Dev server |
-| `pnpm build` | Static export to `out/` |
+| `pnpm build` | Type-check, then build the static site to `dist/` |
+| `pnpm preview` | Serve the built `dist/` locally |
 | `pnpm lint` | ESLint |
-| `pnpm test` | All tests (`test:unit`, `test:security` for one suite) |
+| `pnpm test` | All tests (`test:unit`, `test:integration`, `test:security` for one suite) |
 | `pnpm run deploy` | Build and deploy to Cloudflare Workers — see [DEPLOY.md](DEPLOY.md) |
 
 ```
-app/          Next.js page, layout, manifest and sitemap
+src/          Astro pages, layout, global styles and sitemap endpoint
 components/   Tuner, tap tempo, metronome and UI primitives
 hooks/        useTuner
 utils/        Pitch detection, FFT, note math, metronome timing
-tests/        Unit (172) and security (23) tests
+tests/        Unit (177), integration (3) and security (21) tests
 ```
 
 ## License
