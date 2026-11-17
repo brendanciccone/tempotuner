@@ -10,8 +10,10 @@
   },
   "scripts": {
     "dev": "astro dev",
+    "check": "astro check",
     "build": "astro check && astro build",
-    "preview": "astro preview",
+    "verify": "pnpm run lint && pnpm test && pnpm run build",
+    "preview": "pnpm run build && wrangler dev",
     "deploy": "pnpm build && wrangler deploy",
     "lint": "eslint .",
     "test": "vitest run",
