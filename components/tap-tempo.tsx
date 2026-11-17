@@ -65,8 +65,10 @@ export default function TapTempo() {
       return
     }
 
-    // Keep only the last 8 taps for a more accurate recent tempo
-    const newTaps = [...taps, now].slice(-8)
+    // Keep only the last 8 taps for a more accurate recent tempo. Sorted,
+    // because a touch is committed on release but stamped with its press
+    // time, so it can arrive after a keyboard tap that came later.
+    const newTaps = [...taps, now].sort((a, b) => a - b).slice(-8)
     setTaps(newTaps)
 
     // Calculate BPM if we have at least 2 taps
@@ -132,9 +134,24 @@ export default function TapTempo() {
   // no pointer event at all.
   const pointerTapPendingRef = useRef(false)
 
-  // A finger or stylus that has landed on the pad but is not yet known to be
-  // a press rather than the start of a scroll.
-  const pendingPressRef = useRef<{ pointerId: number; time: number } | null>(null)
+  // Fingers or styluses that have landed on the pad but are not yet known to
+  // be presses rather than the start of a scroll, as press times keyed by
+  // pointer, so two overlapping contacts each count.
+  const pendingPressesRef = useRef(new Map<number, number>())
+
+  const padRef = useRef<HTMLButtonElement>(null)
+
+  // A mouse press released off the pad gets no click, so nothing would clear
+  // the flag above, and it would swallow the next click-only activation (an
+  // assistive-tech press). A release anywhere outside the pad ends the gesture.
+  useEffect(() => {
+    const handlePointerUp = (e: globalThis.PointerEvent) => {
+      if (e.target instanceof Node && padRef.current?.contains(e.target)) return
+      pointerTapPendingRef.current = false
+    }
+    window.addEventListener("pointerup", handlePointerUp)
+    return () => window.removeEventListener("pointerup", handlePointerUp)
+  }, [])
 
   // A pointer tap is timed from the moment the finger or button goes down —
   // the musical hit — not from release, which would add however long each
@@ -149,24 +166,22 @@ export default function TapTempo() {
     if (e.button !== 0) return
     pointerTapPendingRef.current = true
     if (e.pointerType === "touch" || e.pointerType === "pen") {
-      pendingPressRef.current = { pointerId: e.pointerId, time: Date.now() }
+      pendingPressesRef.current.set(e.pointerId, Date.now())
       return
     }
     handleTap()
   }
 
   const handlePadPointerUp = (e: PointerEvent<HTMLButtonElement>) => {
-    const pending = pendingPressRef.current
-    if (!pending || pending.pointerId !== e.pointerId) return
-    pendingPressRef.current = null
-    handleTap(pending.time)
+    const pressTime = pendingPressesRef.current.get(e.pointerId)
+    if (pressTime === undefined) return
+    pendingPressesRef.current.delete(e.pointerId)
+    handleTap(pressTime)
   }
 
   const handlePadPointerCancel = (e: PointerEvent<HTMLButtonElement>) => {
     pointerTapPendingRef.current = false
-    if (pendingPressRef.current?.pointerId === e.pointerId) {
-      pendingPressRef.current = null
-    }
+    pendingPressesRef.current.delete(e.pointerId)
   }
 
   // Keyboard and assistive-tech activation arrive as a click with no pointer
@@ -229,6 +244,7 @@ export default function TapTempo() {
                 : "bg-transparent text-ink border-stroke text-glow",
               "focus:outline-none focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-ink-dim focus-visible:outline-offset-[3px]",
             )}
+            ref={padRef}
             onPointerDown={handlePadPointerDown}
             onPointerUp={handlePadPointerUp}
             onPointerCancel={handlePadPointerCancel}
