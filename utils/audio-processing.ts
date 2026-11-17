@@ -60,8 +60,9 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
   const bufferSize = buffer.length
   const halfSize = Math.floor(bufferSize / 2)
 
-  // Only lags inside the instrument range are ever examined, so the
-  // difference function is computed for those and no further.
+  // Only lags from MAX_FREQUENCY down to PITCH_SEARCH_FLOOR (half a semitone
+  // below A0, so A0 itself is not lost to the edge guard) are examined, and
+  // the difference function is computed for those and no further.
   const tauMin = Math.max(2, Math.floor(sampleRate / MAX_FREQUENCY))
   const tauMax = Math.min(halfSize - 1, longestLag(sampleRate))
   if (tauMax <= tauMin) {
