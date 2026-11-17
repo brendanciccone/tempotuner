@@ -133,6 +133,12 @@ describe("browserslist query cache (GHSA / Dependabot #79)", () => {
 // still the clearest case of a higher patch sitting on an unpatched minor. vite
 // is now Astro's build tool as well as vitest's, which raises the stakes on
 // that floor but does not change it.
+//
+// In November 2026 the overrides moved from package.json to
+// pnpm-workspace.yaml and shrank to the ones a parent's own range still needs:
+// sharp and undici under miniflare, minimatch under typescript-estree. The
+// other floors below now hold through the lockfile alone, which is what these
+// tests read, so they still catch a regression.
 // ----------------------------------------------------------------
 
 // Resolved from the cwd rather than from `import.meta.url`: the jsdom
