@@ -12,9 +12,9 @@ The Worker is connected to this GitHub repository through Workers Builds:
 |---|---|
 | Build command | `pnpm run verify` (lint, tests, then `astro check` and the build to `dist/`) |
 | Deploy command | `npx wrangler deploy` (uploads `dist/` per `wrangler.jsonc`) |
-| Non-production branch builds | On, with `npx wrangler versions upload` |
+| Non-production branch builds | Worker Previews, `npx wrangler preview` (needs Wrangler 4.135.0 or later) |
 
-A merge to `main` builds and deploys. A pull request builds a preview version at `<version>-tempotuner.<account-subdomain>.workers.dev`; the Worker has no bindings, so a preview exposes nothing beyond the site itself.
+A merge to `main` builds and deploys. A pull request builds a Worker Preview with its own URL; the Worker has no bindings, so it needs no `previews` block and a preview exposes nothing beyond the site itself.
 
 Workers Builds reads the Node version from `.node-version` (`24`); Astro needs 22.23.4 or later. The pnpm version comes from `packageManager` in `package.json`.
 
