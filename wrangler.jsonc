@@ -13,5 +13,9 @@
   // setting and overwrites any change made in the dashboard.
   "observability": {
     "enabled": false
-  }
+  },
+
+  // Required by `npx wrangler preview` (Worker Previews), even when empty: this
+  // Worker has no bindings or vars for a preview to repeat.
+  "previews": {}
 }
