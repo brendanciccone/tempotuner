@@ -27,6 +27,14 @@ const isTapKey = (e: KeyboardEvent): boolean => {
 
 const DEFAULT_BPM = 120
 
+// A pause longer than this ends a run of taps.
+const RESET_GAP_MS = 2000
+
+// The reading averages the last 8 taps of the current run. The run is the tail
+// of the history in press order, so those 8 are always the newest 8 kept, and
+// keeping 8 is enough for a late commit to join a run or bridge a pause.
+const MAX_TAPS = 8
+
 export default function TapTempo() {
   const [taps, setTaps] = useState<number[]>([])
   const [bpm, setBpm] = useState<number | null>(null)
@@ -57,24 +65,28 @@ export default function TapTempo() {
   // `now` is when the tap happened, which for a touch is when the finger
   // landed rather than when this runs.
   const handleTap = useCallback((now: number = Date.now()) => {
-
-    // If it's been more than 2 seconds since last tap, reset
-    if (taps.length > 0 && now - taps[taps.length - 1] > 2000) {
-      setTaps([now])
-      setBpm(null)
-      return
-    }
-
-    // Keep only the last 8 taps for a more accurate recent tempo. Sorted,
-    // because a touch is committed on release but stamped with its press
-    // time, so it can arrive after a keyboard tap that came later.
-    const newTaps = [...taps, now].sort((a, b) => a - b).slice(-8)
+    // Sorted, because a touch is committed on release but stamped with its
+    // press time, so it can arrive after a tap that came later. Taps from
+    // before a pause are kept too: a press still held across it can bridge it.
+    const newTaps = [...taps, now].sort((a, b) => a - b).slice(-MAX_TAPS)
     setTaps(newTaps)
 
-    // Calculate BPM if we have at least 2 taps
-    if (newTaps.length >= 2) {
-      const calculatedBpm = calculateBPM(newTaps)
-      setBpm(calculatedBpm)
+    // The current run is every tap after the last pause, found in press
+    // order. Comparing a tap with the last one stored joined two presses
+    // across a pause when the later one lifted first, and threw away taps
+    // that a press still held was about to bridge.
+    let runStart = 0
+    for (let i = 1; i < newTaps.length; i++) {
+      if (newTaps[i] - newTaps[i - 1] > RESET_GAP_MS) runStart = i
+    }
+    const run = newTaps.slice(runStart)
+
+    if (run.length >= 2) {
+      setBpm(calculateBPM(run))
+    } else if (newTaps.length > 1) {
+      // A lone tap after a pause: the old reading is stale.
+      setBpm(null)
+      return
     }
 
     // Trigger animation
@@ -128,11 +140,13 @@ export default function TapTempo() {
   // click.
   const isDownbeat = isMetronomePlaying && currentBeat === 0
 
-  // Set when a pointer press has already tapped, so the click that trails it
+  // The pointer whose press has already tapped, so the click that trails it
   // is not counted a second time. Deduping on click.detail instead dropped
   // Firefox's assistive-tech activation, which clicks with detail 1 and sends
-  // no pointer event at all.
-  const pointerTapPendingRef = useRef(false)
+  // no pointer event at all. The id, not just a flag, so only that pointer's
+  // release or cancel can clear it: a touch lifted elsewhere while the mouse
+  // was held let the mouse's own click count again.
+  const clickPendingPointerRef = useRef<number | null>(null)
 
   // Fingers or styluses that have landed on the pad but are not yet known to
   // be presses rather than the start of a scroll, as press times keyed by
@@ -142,12 +156,15 @@ export default function TapTempo() {
   const padRef = useRef<HTMLButtonElement>(null)
 
   // A mouse press released off the pad gets no click, so nothing would clear
-  // the flag above, and it would swallow the next click-only activation (an
-  // assistive-tech press). A release anywhere outside the pad ends the gesture.
+  // the pointer above, and it would swallow the next click-only activation (an
+  // assistive-tech press). A release anywhere outside the pad ends that
+  // pointer's gesture, including a pending finger or stylus press, which a
+  // later release on the pad with the same pointer id would otherwise commit.
   useEffect(() => {
     const handlePointerUp = (e: globalThis.PointerEvent) => {
       if (e.target instanceof Node && padRef.current?.contains(e.target)) return
-      pointerTapPendingRef.current = false
+      pendingPressesRef.current.delete(e.pointerId)
+      if (clickPendingPointerRef.current === e.pointerId) clickPendingPointerRef.current = null
     }
     window.addEventListener("pointerup", handlePointerUp)
     return () => window.removeEventListener("pointerup", handlePointerUp)
@@ -164,7 +181,7 @@ export default function TapTempo() {
   // beat.
   const handlePadPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return
-    pointerTapPendingRef.current = true
+    clickPendingPointerRef.current = e.pointerId
     if (e.pointerType === "touch" || e.pointerType === "pen") {
       pendingPressesRef.current.set(e.pointerId, Date.now())
       return
@@ -180,15 +197,15 @@ export default function TapTempo() {
   }
 
   const handlePadPointerCancel = (e: PointerEvent<HTMLButtonElement>) => {
-    pointerTapPendingRef.current = false
+    if (clickPendingPointerRef.current === e.pointerId) clickPendingPointerRef.current = null
     pendingPressesRef.current.delete(e.pointerId)
   }
 
   // Keyboard and assistive-tech activation arrive as a click with no pointer
   // press behind it, and tap here; a pointer press's own click does not.
   const handlePadClick = () => {
-    if (pointerTapPendingRef.current) {
-      pointerTapPendingRef.current = false
+    if (clickPendingPointerRef.current !== null) {
+      clickPendingPointerRef.current = null
       return
     }
     handleTap()
@@ -198,7 +215,7 @@ export default function TapTempo() {
     if (e.key !== "Enter" && e.key !== " ") return
     // The keyboard is activating the pad, so no pointer press is in flight; a
     // press that was dragged off and never clicked must not swallow this one.
-    pointerTapPendingRef.current = false
+    clickPendingPointerRef.current = null
     // A held Enter makes the browser click the button again on every repeat,
     // ~30 times a second. Cancelling the repeated keydown cancels that click.
     if (e.repeat) e.preventDefault()
