@@ -4,11 +4,30 @@ import { fftInPlace, nextPowerOfTwo } from "@/utils/fft"
 export const SIGNAL_THRESHOLD = 0.02 // Minimum RMS level to consider as signal (raised to reduce false triggers from background noise)
 export const MIN_FREQUENCY = 27.5 // A0 - lowest piano note
 export const MAX_FREQUENCY = 4186.0 // C8 - highest piano note
+/**
+ * The lowest frequency the detector searches down to: half a semitone below
+ * A0, the boundary between G#0 and A0. Searching only to A0 itself left A0's
+ * own period on the last lag examined — the true period, sampleRate / 27.5, is
+ * never a whole number of samples — where the edge guard rejects it, so an
+ * in-tune or flat A0 read as nothing.
+ */
+export const PITCH_SEARCH_FLOOR = MIN_FREQUENCY * 2 ** (-50 / 1200)
+
 export const FREQUENCY_BUFFER_SIZE = 9 // Median filter buffer (odd number for true median, larger = more stable)
+
+// AnalyserNode accepts frames of 32 to 32768 samples. 8192 is the floor this
+// tuner has always used: at common rates it holds two periods of A0 and gives
+// the YIN sum enough samples at low lags.
+const MIN_ANALYSIS_FRAME = 8192
+const MAX_ANALYSIS_FRAME = 32768
+
+/** The longest lag the detector examines at a sample rate, in samples. */
+const longestLag = (sampleRate: number): number => Math.ceil(sampleRate / PITCH_SEARCH_FLOOR) + 2
 
 // Pre-allocated work buffers, reused every frame. The tuner analyses ~28 frames
 // a second, so allocating these per call would be steady GC pressure.
 let yinWorkBuffer: Float32Array | null = null
+let differenceWorkBuffer: Float32Array | null = null
 let fftReal: Float64Array | null = null
 let fftImag: Float64Array | null = null
 let energyPrefix: Float64Array | null = null
@@ -41,25 +60,29 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
   const bufferSize = buffer.length
   const halfSize = Math.floor(bufferSize / 2)
 
-  // Only lags inside the instrument range are ever examined, so the
-  // difference function is computed for those and no further.
+  // Only lags from MAX_FREQUENCY down to PITCH_SEARCH_FLOOR (half a semitone
+  // below A0, so A0 itself is not lost to the edge guard) are examined, and
+  // the difference function is computed for those and no further.
   const tauMin = Math.max(2, Math.floor(sampleRate / MAX_FREQUENCY))
-  const tauMax = Math.min(halfSize - 1, Math.floor(sampleRate / MIN_FREQUENCY))
+  const tauMax = Math.min(halfSize - 1, longestLag(sampleRate))
   if (tauMax <= tauMin) {
     return 0
   }
 
-  if (!yinWorkBuffer || yinWorkBuffer.length < tauMax + 1) {
+  if (!yinWorkBuffer || !differenceWorkBuffer || yinWorkBuffer.length < tauMax + 1) {
     yinWorkBuffer = new Float32Array(tauMax + 1)
+    differenceWorkBuffer = new Float32Array(tauMax + 1)
   }
   const yinBuffer = yinWorkBuffer
+  // Kept apart from the normalized copy in yinBuffer: step 4 refines on it.
+  const difference = differenceWorkBuffer
 
   // Step 1: Calculate the difference function
   // d(tau) = sum of squared differences between signal and its shifted version
   // Note: We operate directly on the raw buffer (no windowing). YIN's difference
   // function is inherently robust to non-stationarity, and windowing attenuates
   // buffer edges which reduces effective sample count for low-frequency lags.
-  differenceFunction(buffer, tauMax, yinBuffer)
+  differenceFunction(buffer, tauMax, difference)
 
   // Step 2: Cumulative mean normalized difference function (CMNDF)
   // This normalizes the difference function to make threshold selection easier
@@ -67,11 +90,11 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
   let runningSum = 0
 
   for (let tau = 1; tau <= tauMax; tau++) {
-    runningSum += yinBuffer[tau]
+    runningSum += difference[tau]
     if (runningSum === 0) {
       yinBuffer[tau] = 1.0
     } else {
-      yinBuffer[tau] = yinBuffer[tau] * tau / runningSum
+      yinBuffer[tau] = difference[tau] * tau / runningSum
     }
   }
 
@@ -112,11 +135,42 @@ export const detectPitchYIN = (buffer: Float32Array<ArrayBuffer>, sampleRate: nu
     return 0
   }
 
-  // Step 4: Parabolic interpolation for sub-sample accuracy
-  const refinedTau = parabolicInterpolation(yinBuffer, bestTau, tauMax)
+  // A minimum on the last lag searched is the edge of the window, not a
+  // period: the true period is below the search floor, or (at rates the frame
+  // cannot keep up with) longer than the frame can hold. Reporting the edge
+  // would show a confident wrong note — an E1 read as F#1.
+  if (bestTau >= tauMax - 1) {
+    return 0
+  }
+
+  // Step 4: Parabolic interpolation for sub-sample accuracy, on the raw
+  // difference function rather than the normalized one. The normalization
+  // skews the curve around the dip, and the parabola inherits that skew as a
+  // pitch error that grows as the period gets shorter: measured on clean tones,
+  // C7 at 44.1kHz read 2.0 cents sharp against 0.1 here, and E6 at a Bluetooth
+  // headset's 16kHz read 6.1 cents sharp against 0.7.
+  const refinedTau = parabolicInterpolation(difference, bestTau, tauMax)
 
   // Convert tau (period in samples) to frequency
   return sampleRate / refinedTau
+}
+
+/**
+ * The analysis frame for a device sample rate, in samples.
+ *
+ * YIN only finds periods shorter than half the frame, so the frame has to hold
+ * two of the longest period the detector searches (see PITCH_SEARCH_FLOOR). The AudioContext runs at the
+ * device's own rate, and at 176.4/192kHz (pro interfaces, high-res DACs) the
+ * fixed 8192-sample frame topped out at 46.9Hz — below that, a bass's low E
+ * came back as the wrong note.
+ */
+export const analysisFrameSize = (sampleRate: number): number => {
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
+    throw new RangeError(`sampleRate must be a positive finite number, got ${sampleRate}`)
+  }
+
+  const needed = nextPowerOfTwo(2 * (longestLag(sampleRate) + 2))
+  return Math.min(MAX_ANALYSIS_FRAME, Math.max(MIN_ANALYSIS_FRAME, needed))
 }
 
 /**
@@ -194,14 +248,14 @@ export const differenceFunction = (
  * Parabolic interpolation to refine the pitch estimate
  * Fits a parabola through three points and finds the minimum
  */
-const parabolicInterpolation = (yinBuffer: Float32Array, tau: number, maxTau: number): number => {
+const parabolicInterpolation = (curve: Float32Array, tau: number, maxTau: number): number => {
   if (tau <= 0 || tau >= maxTau - 1) {
     return tau
   }
 
-  const s0 = yinBuffer[tau - 1]
-  const s1 = yinBuffer[tau]
-  const s2 = yinBuffer[tau + 1]
+  const s0 = curve[tau - 1]
+  const s1 = curve[tau]
+  const s2 = curve[tau + 1]
 
   // Parabolic interpolation formula
   const denominator = 2 * (2 * s1 - s2 - s0)

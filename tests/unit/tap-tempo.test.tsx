@@ -111,15 +111,276 @@ describe("tap tempo keyboard input", () => {
     expect(getBpm()).toBe("120")
   })
 
-  it("still taps when a press is cancelled before its click", () => {
-    // On a phone the click is dropped when the finger drifts a few pixels; the
-    // pointerdown has already counted, so the tap is not lost.
+  it("counts a mouse press even when its click never arrives", () => {
+    // A mouse press dragged off the pad before release gets no click; it was
+    // already counted on pointerdown, which is the moment of the hit.
     render(<TapTempo />)
     const pad = screen.getByRole("button", { name: /tap to set tempo/i })
 
     pressFourTimes(() => fireEvent.pointerDown(pad, { button: 0 }))
 
     expect(getBpm()).toBe("120")
+  })
+
+  it("counts an assistive-tech click that arrives without a pointer event", () => {
+    // Regression: Firefox's accessibility "press" (NVDA/JAWS browse mode,
+    // VoiceOver, TalkBack) sends mousedown, mouseup and a click with detail 1,
+    // but no pointerdown. Deduping on detail === 0 dropped every one of them.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    pressFourTimes(() => {
+      fireEvent.mouseDown(pad)
+      fireEvent.mouseUp(pad)
+      fireEvent.click(pad, { detail: 1 })
+    })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("does not let a pointer press that never clicked swallow the next keyboard tap", () => {
+    // A press that is dragged off the pad taps on pointerdown and then never
+    // gets its click; the next Enter on the pad must still count.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.pointerDown(pad, { button: 0 })
+    vi.advanceTimersByTime(500)
+    fireEvent.keyDown(pad, { key: "Enter", code: "Enter" })
+    fireEvent.click(pad, { detail: 0 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it.each(["touch", "pen"])("does not tap when a %s press on the pad turns into a scroll", (pointerType) => {
+    // Regression: taps counted on pointerdown, which a touch sends before the
+    // browser knows whether the finger is panning. A swipe that started on
+    // the pad was a beat — and more than 2s after the last one it cleared the
+    // reading and sent a running metronome back to 120. When the browser
+    // takes a touch over for a pan or pinch it sends pointercancel instead of
+    // pointerup, and the press is dropped.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    pressFourTimes(() => {
+      fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+      fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+      fireEvent.click(pad, { detail: 1 })
+    })
+    expect(getBpm()).toBe("120")
+
+    // A finger or a stylus (Apple Pencil, S Pen) can both start a scroll.
+    vi.advanceTimersByTime(3000)
+    fireEvent.pointerDown(pad, { button: 0, pointerType, pointerId: 2 })
+    fireEvent.pointerCancel(pad, { pointerType, pointerId: 2 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it.each(["touch", "pen"])("times a %s tap from when it lands, not when it lifts", (pointerType) => {
+    // The tap is committed on release (only then is it known not to be a
+    // scroll) but stamped with the press time, so hold length stays out of
+    // the interval: timing the releases here would read 105 BPM.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    const holdTimes = [40, 180, 90, 260]
+    holdTimes.forEach((hold, i) => {
+      fireEvent.pointerDown(pad, { button: 0, pointerType, pointerId: i + 1 })
+      vi.advanceTimersByTime(hold)
+      fireEvent.pointerUp(pad, { button: 0, pointerType, pointerId: i + 1 })
+      fireEvent.click(pad, { detail: 1 })
+      if (i < holdTimes.length - 1) vi.advanceTimersByTime(500 - hold)
+    })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("does not let a mouse press released off the pad swallow the next assistive-tech click", () => {
+    // Regression: the press tapped on pointerdown and set a flag for its
+    // trailing click, but a release off the pad sends no click, so the flag
+    // stayed set and ate the next click-only activation.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.pointerDown(pad, { button: 0 })
+    fireEvent.pointerUp(document.body, { button: 0 })
+    vi.advanceTimersByTime(500)
+    fireEvent.click(pad, { detail: 1 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("counts two overlapping touches as two taps", () => {
+    // Regression: one pending press was kept, so a second finger landing
+    // before the first lifted replaced it and the first beat was lost.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+    vi.advanceTimersByTime(500)
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 2 })
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+    // The click trailing the first release must not count a third beat.
+    fireEvent.click(pad, { detail: 1 })
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 2 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("forgets a pen press lifted off the pad, so a later lift on the pad cannot commit it", () => {
+    // Regression: a release outside the pad cleared the click flag but kept
+    // the pending press, so the next release on the pad with the same
+    // pointer id committed the stale press time (80 BPM here).
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "pen", pointerId: 1 })
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerUp(document.body, { button: 0, pointerType: "pen", pointerId: 1 })
+    vi.advanceTimersByTime(900)
+    fireEvent.keyDown(document.body, { key: "a" })
+    vi.advanceTimersByTime(500)
+    fireEvent.keyDown(document.body, { key: "a" })
+    expect(getBpm()).toBe("120")
+
+    // The same pointer id lands off the pad and lifts on it.
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerDown(document.body, { button: 0, pointerType: "pen", pointerId: 1 })
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "pen", pointerId: 1 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("does not let another pointer lifting off the pad free a held mouse press's click", () => {
+    // Regression: any release outside the pad cleared the click flag, so a
+    // touch lifted elsewhere while the mouse was held let the mouse's own
+    // click count a second beat (240 BPM here).
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "mouse", pointerId: 1 })
+    vi.advanceTimersByTime(50)
+    fireEvent.pointerDown(document.body, { button: 0, pointerType: "touch", pointerId: 2 })
+    fireEvent.pointerUp(document.body, { button: 0, pointerType: "touch", pointerId: 2 })
+    vi.advanceTimersByTime(50)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "mouse", pointerId: 1 })
+    fireEvent.click(pad, { detail: 1 })
+    vi.advanceTimersByTime(400)
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "mouse", pointerId: 1 })
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "mouse", pointerId: 1 })
+    fireEvent.click(pad, { detail: 1 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("does not let another pointer's cancelled press free a held mouse press's click", () => {
+    // The same as above for a touch the browser takes over for a scroll.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 2 })
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "mouse", pointerId: 1 })
+    vi.advanceTimersByTime(50)
+    fireEvent.pointerCancel(pad, { pointerType: "touch", pointerId: 2 })
+    vi.advanceTimersByTime(50)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "mouse", pointerId: 1 })
+    fireEvent.click(pad, { detail: 1 })
+    vi.advanceTimersByTime(400)
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "mouse", pointerId: 1 })
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "mouse", pointerId: 1 })
+    fireEvent.click(pad, { detail: 1 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("does not join touches pressed more than two seconds apart when the later one lifts first", () => {
+    // Regression: the pause was measured only against the last tap stored,
+    // so the earlier press, committed second, slipped in before it and the
+    // two read 20 BPM. Only the later press starts the new run.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+    vi.advanceTimersByTime(3000)
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 2 })
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 2 })
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+    expect(getBpm()).toBe("---")
+
+    vi.advanceTimersByTime(300)
+    fireEvent.keyDown(document.body, { key: "a" })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("keeps a tap that a touch lifted later bridges back into the run", () => {
+    // Regression: the touch pressed at 2.8s lifted first, more than 2s after
+    // the key tap, and the reset dropped that tap. The touch pressed at 1s
+    // then lifted and joined the run, but the key tap was gone (33 BPM).
+    // All three count: intervals of 1000 and 1800ms average to 43 BPM.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.keyDown(document.body, { key: "a" })
+    vi.advanceTimersByTime(1000)
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+    vi.advanceTimersByTime(1800)
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 2 })
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 2 })
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+
+    expect(getBpm()).toBe("43")
+  })
+
+  it("places a touch tap by its press time, even after a later keyboard tap", () => {
+    // Regression: a touch is committed on release, so it was appended after a
+    // key pressed while the finger was still down, and the out-of-order
+    // interval read 240 BPM for a steady 120.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+
+    fireEvent.keyDown(document.body, { key: "a" })
+    vi.advanceTimersByTime(500)
+    fireEvent.pointerDown(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+    vi.advanceTimersByTime(500)
+    fireEvent.keyDown(document.body, { key: "a" })
+    vi.advanceTimersByTime(100)
+    fireEvent.pointerUp(pad, { button: 0, pointerType: "touch", pointerId: 1 })
+
+    expect(getBpm()).toBe("120")
+  })
+
+  it("does not repeat taps while Enter is held on the focused pad", () => {
+    // The window listener skips auto-repeat, but on a focused button every
+    // repeated Enter is also turned into a click by the browser. Cancelling
+    // the repeated keydown is what stops that click.
+    render(<TapTempo />)
+    const pad = screen.getByRole("button", { name: /tap to set tempo/i })
+    pad.focus()
+
+    const notCancelled = fireEvent.keyDown(pad, { key: "Enter", code: "Enter", repeat: true })
+
+    expect(notCancelled).toBe(false)
+  })
+
+  it("does not scroll the page while Space is held", () => {
+    // Regression: the repeat filter returned before the Space preventDefault,
+    // so only the first keydown of a held Space was cancelled and the rest
+    // scrolled the page.
+    render(<TapTempo />)
+
+    fireEvent.keyDown(document.body, { key: " ", code: "Space" })
+    const repeatNotCancelled = fireEvent.keyDown(document.body, { key: " ", code: "Space", repeat: true })
+
+    expect(repeatNotCancelled).toBe(false)
+    expect(getBpm()).toBe("---")
   })
 
   it("ignores secondary-button presses", () => {

@@ -3,31 +3,17 @@
   "version": "0.1.0",
   "license": "MIT",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22.23.4"
   },
-  "pnpm": {
-    "overrides": {
-      "vite@^8.0.0": "8.3.8",
-      "postcss": "^8.5.24",
-      "sharp": "^0.35.5",
-      "undici": "^7.30.1",
-      "nanoid@^3.0.0": "^3.3.17",
-      "js-yaml@^4.0.0": "^4.3.2",
-      "source-map-js@^1.0.0": "^1.2.2",
-      "browserslist@^4.0.0": "^4.28.7",
-      "brace-expansion@^1.0.0": "^1.1.21",
-      "brace-expansion@^5.0.0": "^5.0.12",
-      "zod": "^4.6.6",
-      "minimatch@^10.0.0": "^11.0.1"
-    },
-    "onlyBuiltDependencies": []
-  },
   "scripts": {
     "dev": "astro dev",
+    "check": "astro check",
     "build": "astro check && astro build",
-    "preview": "astro preview",
+    "verify": "pnpm run lint && pnpm test && pnpm run build",
+    "preview": "pnpm run build && wrangler dev",
     "deploy": "pnpm build && wrangler deploy",
     "lint": "eslint .",
     "test": "vitest run",
@@ -54,7 +40,7 @@
     "@tailwindcss/vite": "^4.3.5",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "eslint": "9.39.5",

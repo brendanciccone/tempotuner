@@ -45,20 +45,10 @@ logs
 .turbo
 .swc/
 
-# local env files
-.env
-.env*.local
-.env.development
-.env.test
-.env.production
-.env.development.local
-.env.test.local
-.env.production.local
-
-# vercel and deployment
-.vercel
-.netlify
-.serverless/
+# Local environment and secrets
+.env*
+!.env.example
+.dev.vars*
 
 # typescript
 *.tsbuildinfo
@@ -93,16 +83,17 @@ Thumbs.db
 storybook-static/
 storybook-static
 
-# PWA files
-**/public/sw.js
-**/public/workbox-*.js
-**/public/worker-*.js
-**/public/sw.js.map
-**/public/workbox-*.js.map
-**/public/worker-*.js.map
-
 # Temporary files
 *.tmp
 *.temp
 *.bak
 *~
+
+# Cloudflare local state
+.wrangler/
+
+# Claude Code local settings (the rest of .claude/ is committed)
+.claude/*.local.json
+
+# iCloud conflict copies
+* [0-9].*
